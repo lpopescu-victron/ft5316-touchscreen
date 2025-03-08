@@ -5,7 +5,7 @@ echo "Starting touchscreen setup for Raspberry Pi 5..."
 # Update system and install prerequisites
 echo "Updating system and installing base packages..."
 sudo apt update
-sudo apt install -y python3-pip x11-xserver-utils x11-apps
+sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus
 
 # Install pyautogui with --break-system-packages
 echo "Installing pyautogui..."
@@ -17,11 +17,32 @@ cat << 'EOF' > /home/pi/ft5316_touch.py
 import smbus
 import time
 import pyautogui
+import os
 
-bus = smbus.SMBus(11)  # HDMI0, adjust to 12 if needed
 FT5316_ADDR = 0x38
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 600
+
+def detect_i2c_bus():
+    """Detect the I2C bus with the FT5316 touchscreen (address 0x38)."""
+    for bus_num in range(20):  # Check buses 0-19
+        dev_path = f"/dev/i2c-{bus_num}"
+        if os.path.exists(dev_path):
+            try:
+                bus = smbus.SMBus(bus_num)
+                bus.read_byte_data(FT5316_ADDR, 0x00)
+                print(f"FT5316 found on I2C bus {bus_num}")
+                return bus_num
+            except IOError:
+                continue
+    raise RuntimeError("FT5316 touchscreen not found on any I2C bus")
+
+try:
+    bus_number = detect_i2c_bus()
+    bus = smbus.SMBus(bus_number)
+except RuntimeError as e:
+    print(e)
+    exit(1)
 
 pyautogui.FAILSAFE = False
 
@@ -112,6 +133,7 @@ After=graphical.target
 [Service]
 User=pi
 Environment=DISPLAY=:0
+ExecStartPre=/bin/sleep 10
 ExecStart=/usr/bin/python3 /home/pi/ft5316_touch.py
 Restart=always
 WorkingDirectory=/home/pi
