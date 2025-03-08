@@ -4,16 +4,23 @@ This repository provides a setup script for configuring the FT5316 touchscreen o
 
 ## Prerequisites
 
-Before running the installation script, please perform the following steps using `raspi-config`:
+Before running the installation script, please perform the following steps using `raspi-config` and update your system:
 
-1. **Enable I2C:**
+1. **System Update (Recommended):**
+   - Open a terminal and run the following command to update your package lists and upgrade all installed packages:
+     ```bash
+     sudo apt update && sudo apt full-upgrade
+     ```
+   - This ensures your system is fully updated before you proceed with the touchscreen setup.
+
+2. **Enable I2C:**
    - Open a terminal and run:
      ```bash
      sudo raspi-config
      ```
    - Navigate to **Interface Options** and enable **I2C**.
 
-2. **Switch from Wayland to X:**
+3. **Switch from Wayland to X:**
    - If your Raspberry Pi is currently using the Wayland display server, you need to switch to the X11 (Xorg) display server for the touchscreen to work properly.
    - To do this, follow these steps:
      1. Open a terminal and run:
@@ -28,12 +35,12 @@ Before running the installation script, please perform the following steps using
         sudo reboot
         ```
 
-3. **Reboot:**
+4. **Reboot:**
    - After applying the changes from `raspi-config`, reboot your Raspberry Pi if you haven't already.
 
 ## Installation
 
-After your Raspberry Pi has rebooted, install the touchscreen driver by running the following command:
+After your Raspberry Pi has rebooted and your system is updated, install the touchscreen driver by running the following command:
 
 ```bash
 wget https://raw.githubusercontent.com/lpopescu-victron/ft5316-touchscreen/main/setup_touchscreen.sh && chmod +x setup_touchscreen.sh && ./setup_touchscreen.sh
