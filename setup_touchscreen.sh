@@ -102,16 +102,31 @@ EOF
 # Make the script executable
 chmod +x /home/pi/ft5316_touch.py
 
-# Create a launcher script
-echo "Creating launcher script..."
-cat << 'EOF' > /home/pi/run_touchscreen.sh
-#!/bin/bash
-export DISPLAY=:0
-python3 /home/pi/ft5316_touch.py
-EOF
+# Create systemd service to run at boot
+echo "Creating systemd service for auto-start..."
+sudo bash -c 'cat << "EOF" > /etc/systemd/system/ft5316-touchscreen.service
+[Unit]
+Description=FT5316 Touchscreen Driver
+After=graphical.target
 
-chmod +x /home/pi/run_touchscreen.sh
+[Service]
+User=pi
+Environment=DISPLAY=:0
+ExecStart=/usr/bin/python3 /home/pi/ft5316_touch.py
+Restart=always
+WorkingDirectory=/home/pi
+
+[Install]
+WantedBy=graphical.target
+EOF'
+
+# Enable and start the service
+sudo systemctl daemon-reload
+sudo systemctl enable ft5316-touchscreen.service
+sudo systemctl start ft5316-touchscreen.service
 
 echo "Setup complete!"
-echo "To run the touchscreen, use: /home/pi/run_touchscreen.sh"
+echo "Touchscreen driver is now set to run at boot."
+echo "To disable, run: sudo systemctl disable ft5316-touchscreen.service"
+echo "To stop manually, run: sudo systemctl stop ft5316-touchscreen.service"
 echo "Assuming X11 is enabled via raspi-config (Advanced Options > Wayland > X11)."
