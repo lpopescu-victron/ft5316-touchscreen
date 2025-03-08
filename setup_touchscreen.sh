@@ -127,6 +127,6 @@ sudo systemctl start ft5316-touchscreen.service
 
 echo "Setup complete!"
 echo "Touchscreen driver is now set to run at boot."
-echo "To disable, run: sudo systemctl disable ft5316-touchscreen.service"
-echo "To stop manually, run: sudo systemctl stop ft5316-touchscreen.service"
-echo "Assuming X11 is enabled via raspi-config (Advanced Options > Wayland > X11)."
+echo "Rebooting in 5 seconds to apply changes..."
+sleep 5
+sudo reboot
