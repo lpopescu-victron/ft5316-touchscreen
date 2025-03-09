@@ -5,7 +5,7 @@ echo "Starting touchscreen setup for Raspberry Pi..."
 # Update system and install prerequisites
 echo "Updating system and installing base packages..."
 sudo apt update
-sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus
+sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus i2c-tools
 
 # Install pyautogui with --break-system-packages
 echo "Installing pyautogui..."
@@ -21,52 +21,50 @@ else
     echo "I2C is already enabled in $CONFIG_FILE."
 fi
 
-# Ask user for display resolution option
-echo "Select display resolution option:"
-echo "1) PI default (no custom HDMI settings)"
-echo "2) 1024x600 - Recommended for GX Touch 70 (higher resolution)"
-echo "3) 800x480 - Recommended for GX Touch 50 (lower resolution)"
-read -p "Enter your choice (1-3): " choice
+# Detect screen type from EEPROM at 0x50, offset 0x53
+echo "Detecting screen type from EEPROM..."
+I2C_BUS=21  # Based on your output
+EEPROM_ADDR=0x50
+OFFSET=0x53
+MODEL_ID=$(i2cget -y $I2C_BUS $EEPROM_ADDR $OFFSET)
 
-case $choice in
-    1)
-        echo "Using PI default display resolution. Removing any custom HDMI settings..."
-        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-        ;;
-    2)
-        echo "Setting HDMI screen resolution to 1024x600..."
-        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> ${CONFIG_FILE}"
-        ;;
-    3)
-        echo "Setting HDMI screen resolution to 800x480..."
-        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> ${CONFIG_FILE}"
-        ;;
-    *)
-        echo "Invalid option. Exiting..."
-        exit 1
-        ;;
-esac
+if [ "$MODEL_ID" = "0x35" ]; then
+    echo "Detected GX Touch 50 (800x480)"
+    SCREEN_WIDTH=800
+    SCREEN_HEIGHT=480
+    HDMI_GROUP=2
+    HDMI_MODE=87
+    HDMI_CVT="800 480 60 6 0 0 0"
+elif [ "$MODEL_ID" = "0x37" ]; then
+    echo "Detected GX Touch 70 (1024x600)"
+    SCREEN_WIDTH=1024
+    SCREEN_HEIGHT=600
+    HDMI_GROUP=3
+    HDMI_MODE=88
+    HDMI_CVT="1024 600 60 6 0 0 0"
+else
+    echo "Unknown screen type (ID: $MODEL_ID), defaulting to GX Touch 50 (800x480)"
+    SCREEN_WIDTH=800
+    SCREEN_HEIGHT=480
+    HDMI_GROUP=2
+    HDMI_MODE=87
+    HDMI_CVT="800 480 60 6 0 0 0"
+fi
 
-# Create the touchscreen script with improved detection and signal handling
+# Write HDMI settings to config.txt
+echo "Setting HDMI screen resolution to ${SCREEN_WIDTH}x${SCREEN_HEIGHT}..."
+sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
+sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
+sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
+sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
+sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
+sudo bash -c "echo 'hdmi_group=${HDMI_GROUP}' >> ${CONFIG_FILE}"
+sudo bash -c "echo 'hdmi_mode=${HDMI_MODE}' >> ${CONFIG_FILE}"
+sudo bash -c "echo 'hdmi_cvt=${HDMI_CVT}' >> ${CONFIG_FILE}"
+
+# Create the touchscreen script with dynamic resolution
 echo "Setting up touchscreen script..."
-cat << 'EOF' > /home/pi/ft5316_touch.py
+cat << EOF > /home/pi/ft5316_touch.py
 import smbus
 import time
 import pyautogui
@@ -85,8 +83,8 @@ signal.signal(signal.SIGINT, signal_handler)
 FT5316_ADDR = 0x38
 EEPROM_ADDR1 = 0x50
 EEPROM_ADDR2 = 0x51
-SCREEN_WIDTH = 800  # Default to GX Touch 50; adjust based on choice if needed
-SCREEN_HEIGHT = 480
+SCREEN_WIDTH = $SCREEN_WIDTH
+SCREEN_HEIGHT = $SCREEN_HEIGHT
 
 print("Script starting...")
 def detect_i2c_bus():
@@ -178,7 +176,7 @@ while True:
         time.sleep(0.05)
     except Exception as e:
         print(f"Error in loop: {e}")
-        time.sleep(1)  # Prevent tight loop on error
+        time.sleep(1)
 EOF
 
 # Make the touchscreen script executable
