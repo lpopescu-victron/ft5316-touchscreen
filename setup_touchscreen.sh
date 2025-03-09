@@ -28,7 +28,7 @@ sudo rm -f /home/pi/adjust_resolution.sh
 # Update system and install prerequisites
 echo "Updating system and installing base packages..."
 sudo apt update
-sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus i2c-tools xserver-xorg-core
+sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus i2c-tools xserver-xorg-core xserver-xorg-utils
 
 # Install pyautogui
 echo "Installing pyautogui..."
