@@ -21,84 +21,6 @@ else
     echo "I2C is already enabled in $CONFIG_FILE."
 fi
 
-# Detect screen type from EEPROM at 0x50, offset 0x53
-echo "Detecting screen type from EEPROM..."
-I2C_BUS=$(i2cdetect -l | grep -o "i2c-[0-9]*" | head -1 | cut -d'-' -f2)  # Auto-detect bus
-EEPROM_ADDR=0x50
-OFFSET=0x53
-MODEL_ID=$(i2cget -y $I2C_BUS $EEPROM_ADDR $OFFSET 2>/dev/null || echo "0x00")
-
-if [ "$MODEL_ID" = "0x35" ]; then
-    echo "Detected GX Touch 50 (800x480)"
-    SCREEN_WIDTH=800
-    SCREEN_HEIGHT=480
-    HDMI_GROUP=2
-    HDMI_MODE=87
-    HDMI_CVT="800 480 60 6 0 0 0"
-elif [ "$MODEL_ID" = "0x37" ]; then
-    echo "Detected GX Touch 70 (1024x600)"
-    SCREEN_WIDTH=1024
-    SCREEN_HEIGHT=600
-    HDMI_GROUP=2
-    HDMI_MODE=87
-    HDMI_CVT="1024 600 60 6 0 0 0"
-else
-    echo "Unknown screen type (ID: $MODEL_ID), prompting for manual choice..."
-    echo "Select display resolution:"
-    echo "1) PI default (no custom HDMI settings)"
-    echo "2) 1024x600 - GX Touch 70"
-    echo "3) 800x480 - GX Touch 50"
-    read -p "Enter your choice (1-3): " choice
-    case $choice in
-        1)
-            echo "Using PI default display resolution..."
-            sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-            sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-            sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-            sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-            SCREEN_WIDTH=1280  # Default for Python
-            SCREEN_HEIGHT=800
-            ;;
-        2)
-            echo "Setting HDMI screen resolution to 1024x600..."
-            SCREEN_WIDTH=1024
-            SCREEN_HEIGHT=600
-            HDMI_GROUP=2
-            HDMI_MODE=87
-            HDMI_CVT="1024 600 60 6 0 0 0"
-            ;;
-        3)
-            echo "Setting HDMI screen resolution to 800x480..."
-            SCREEN_WIDTH=800
-            SCREEN_HEIGHT=480
-            HDMI_GROUP=2
-            HDMI_MODE=87
-            HDMI_CVT="800 480 60 6 0 0 0"
-            ;;
-        *)
-            echo "Invalid option, defaulting to 800x480..."
-            SCREEN_WIDTH=800
-            SCREEN_HEIGHT=480
-            HDMI_GROUP=2
-            HDMI_MODE=87
-            HDMI_CVT="800 480 60 6 0 0 0"
-            ;;
-    esac
-fi
-
-# Write HDMI settings to config.txt if detected or chosen
-if [ -n "$HDMI_CVT" ]; then
-    echo "Setting HDMI screen resolution to ${SCREEN_WIDTH}x${SCREEN_HEIGHT}..."
-    sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-    sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-    sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-    sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-    sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
-    sudo bash -c "echo 'hdmi_group=${HDMI_GROUP}' >> ${CONFIG_FILE}"
-    sudo bash -c "echo 'hdmi_mode=${HDMI_MODE}' >> ${CONFIG_FILE}"
-    sudo bash -c "echo 'hdmi_cvt=${HDMI_CVT}' >> ${CONFIG_FILE}"
-fi
-
 # Create the touchscreen script with dynamic detection
 echo "Setting up touchscreen script..."
 cat << EOF > /home/pi/ft5316_touch.py
@@ -134,11 +56,11 @@ def detect_screen_type():
             print("Detected GX Touch 70 (1024x600)")
             return 1024, 600
         else:
-            print(f"Unknown screen type (ID: {hex(model_id)}), defaulting to config.txt settings")
-            return $SCREEN_WIDTH, $SCREEN_HEIGHT  # Use config.txt values
+            print(f"Unknown screen type (ID: {hex(model_id)}), defaulting to 800x480")
+            return 800, 480
     except Exception as e:
-        print(f"Error detecting screen type: {e}, defaulting to config.txt settings")
-        return $SCREEN_WIDTH, $SCREEN_HEIGHT
+        print(f"Error detecting screen type: {e}, defaulting to 800x480")
+        return 800, 480
 
 print("Script starting...")
 def detect_i2c_bus():
@@ -237,12 +159,75 @@ EOF
 # Make the touchscreen script executable
 chmod +x /home/pi/ft5316_touch.py
 
-# Create systemd service for auto-start
-echo "Creating systemd service for auto-start..."
+# Create a boot script to adjust resolution
+echo "Creating boot script for dynamic resolution..."
+cat << 'EOF' > /home/pi/adjust_resolution.sh
+#!/bin/bash
+
+CONFIG_FILE="/boot/firmware/config.txt"
+I2C_BUS=$(i2cdetect -l | grep -o "i2c-[0-9]*" | head -1 | cut -d'-' -f2)
+EEPROM_ADDR=0x50
+OFFSET=0x53
+MODEL_ID=$(i2cget -y $I2C_BUS $EEPROM_ADDR $OFFSET 2>/dev/null || echo "0x00")
+
+if [ "$MODEL_ID" = "0x35" ]; then
+    RESOLUTION="800x480"
+    HDMI_CVT="800 480 60 6 0 0 0"
+elif [ "$MODEL_ID" = "0x37" ]; then
+    RESOLUTION="1024x600"
+    HDMI_CVT="1024 600 60 6 0 0 0"
+else
+    RESOLUTION="800x480"
+    HDMI_CVT="800 480 60 6 0 0 0"
+fi
+
+# Check current config
+CURRENT_CVT=$(grep "hdmi_cvt" $CONFIG_FILE | cut -d'=' -f2)
+
+if [ "$CURRENT_CVT" != "$HDMI_CVT" ]; then
+    echo "Updating resolution to $RESOLUTION..."
+    sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
+    sudo sed -i '/hdmi_group/d' $CONFIG_FILE
+    sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
+    sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
+    sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
+    sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
+    sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
+    sudo bash -c "echo 'hdmi_cvt=$HDMI_CVT' >> $CONFIG_FILE"
+    sudo reboot
+else
+    echo "Resolution already set to $RESOLUTION"
+fi
+EOF
+
+# Make the boot script executable
+chmod +x /home/pi/adjust_resolution.sh
+
+# Create systemd service for boot script
+echo "Creating resolution adjustment service..."
+sudo bash -c 'cat << "EOF" > /etc/systemd/system/adjust-resolution.service
+[Unit]
+Description=Adjust Screen Resolution at Boot
+Before=graphical.target
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/pi/adjust_resolution.sh
+RemainAfterExit=yes
+User=pi
+
+[Install]
+WantedBy=multi-user.target
+EOF'
+
+# Create systemd service for touchscreen
+echo "Creating touchscreen service..."
 sudo bash -c 'cat << "EOF" > /etc/systemd/system/ft5316-touchscreen.service
 [Unit]
 Description=FT5316 Touchscreen Driver
-After=graphical.target multi-user.target
+After=graphical.target multi-user.target adjust-resolution.service
+Wants=adjust-resolution.service
 
 [Service]
 User=pi
@@ -258,13 +243,15 @@ TimeoutStopSec=10
 WantedBy=graphical.target
 EOF'
 
-# Enable and start the service
+# Enable and start services
 sudo systemctl daemon-reload
+sudo systemctl enable adjust-resolution.service
 sudo systemctl enable ft5316-touchscreen.service
+sudo systemctl start adjust-resolution.service
 sudo systemctl start ft5316-touchscreen.service
 
 echo "Setup complete!"
-echo "Touchscreen driver is now set to run at boot with dynamic screen detection."
+echo "Resolution will adjust at every boot based on screen type."
 echo "Rebooting in 5 seconds to apply changes..."
 sleep 5
 sudo reboot
