@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Starting touchscreen setup for Raspberry Pi 5..."
+echo "Starting touchscreen setup for Raspberry Pi..."
 
 # Update system and install prerequisites
 echo "Updating system and installing base packages..."
@@ -64,31 +64,41 @@ case $choice in
         ;;
 esac
 
-# Create the touchscreen script (with updated I2C bus detection)
+# Create the touchscreen script with improved detection and signal handling
 echo "Setting up touchscreen script..."
 cat << 'EOF' > /home/pi/ft5316_touch.py
 import smbus
 import time
 import pyautogui
 import os
+import sys
+import signal
+
+# Signal handler for clean exit
+def signal_handler(sig, frame):
+    print("Received signal to exit, shutting down...")
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 FT5316_ADDR = 0x38
 EEPROM_ADDR1 = 0x50
 EEPROM_ADDR2 = 0x51
-SCREEN_WIDTH = 1024  # Adjust based on choice (default 1024x600)
-SCREEN_HEIGHT = 600  # Adjust based on choice (default 1024x600)
+SCREEN_WIDTH = 800  # Default to GX Touch 50; adjust based on choice if needed
+SCREEN_HEIGHT = 480
 
+print("Script starting...")
 def detect_i2c_bus():
-    """Detect the I2C bus with FT5316 (0x38), 0x50, and 0x51 present."""
-    for bus_num in range(100):  # Check buses 0-99
+    print("Detecting I2C bus...")
+    for bus_num in range(100):
         dev_path = f"/dev/i2c-{bus_num}"
         if os.path.exists(dev_path):
             try:
                 bus = smbus.SMBus(bus_num)
-                # Test all three addresses
-                bus.read_byte_data(FT5316_ADDR, 0x00)  # FT5316
-                bus.read_byte_data(EEPROM_ADDR1, 0x00)  # 0x50
-                bus.read_byte_data(EEPROM_ADDR2, 0x00)  # 0x51
+                bus.read_byte_data(FT5316_ADDR, 0x00)
+                bus.read_byte_data(EEPROM_ADDR1, 0x00)
+                bus.read_byte_data(EEPROM_ADDR2, 0x00)
                 print(f"Found FT5316 (0x38), 0x50, and 0x51 on I2C bus {bus_num}")
                 return bus_num
             except IOError:
@@ -99,26 +109,11 @@ try:
     bus_number = detect_i2c_bus()
     bus = smbus.SMBus(bus_number)
 except RuntimeError as e:
-    print(e)
-    exit(1)
+    print(f"Error: {e}")
+    sys.exit(1)
 
 pyautogui.FAILSAFE = False
-
-def read_touch():
-    try:
-        regs = bus.read_i2c_block_data(FT5316_ADDR, 0x00, 16)
-        touch_points = regs[2]  # Number of touch points
-        if touch_points > 0:  # Any touch
-            event = (regs[3] >> 6) & 0x03  # Bits 7:6 = event (0=down, 1=up, 2=move)
-            x = ((regs[3] & 0x0F) << 8) | regs[4]
-            y = ((regs[5] & 0x0F) << 8) | regs[6]
-            return event, x, y
-        return None, None, None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None, None, None
-
-print("Starting touchscreen control. Ctrl+C to stop.")
+print("Starting touchscreen control. Ctrl+C or SIGTERM to stop.")
 last_event = None
 last_x, last_y = None, None
 touch_start_time = None
@@ -126,87 +121,51 @@ touch_start_x, touch_start_y = None, None
 no_touch_time = None
 
 while True:
-    event, x, y = read_touch()
-    if event is not None:
-        screen_x = min(max(x, 0), SCREEN_WIDTH - 1)
-        screen_y = min(max(y, 0), SCREEN_HEIGHT - 1)
-        print(f"Event: {event}, Raw X: {x}, Raw Y: {y} -> Screen X: {screen_x}, Screen Y: {screen_y}")
+    try:
+        regs = bus.read_i2c_block_data(FT5316_ADDR, 0x00, 16)
+        touch_points = regs[2]
+        if touch_points > 0:
+            event = (regs[3] >> 6) & 0x03
+            x = ((regs[3] & 0x0F) << 8) | regs[4]
+            y = ((regs[5] & 0x0F) << 8) | regs[6]
+            screen_x = min(max(x, 0), SCREEN_WIDTH - 1)
+            screen_y = min(max(y, 0), SCREEN_HEIGHT - 1)
+            print(f"Event: {event}, Raw X: {x}, Raw Y: {y} -> Screen X: {screen_x}, Screen Y: {screen_y}")
 
-        if event != last_event:
-            print(f"Event changed: {last_event} -> {event}")
-            last_event = event
+            if event != last_event:
+                print(f"Event changed: {last_event} -> {event}")
+                last_event = event
 
-        if event == 0:  # Touch down
-            pyautogui.mouseDown(screen_x, screen_y)
-            last_x, last_y = screen_x, screen_y
-            touch_start_time = time.time()
-            touch_start_x, touch_start_y = screen_x, screen_y
-        elif event == 1:  # Touch up
-            if last_x is not None and last_y is not None:
-                pyautogui.mouseUp(screen_x, screen_y)
-                touch_duration = time.time() - touch_start_time if touch_start_time else 0
-                movement = abs(screen_x - touch_start_x) + abs(screen_y - touch_start_y)
-                if touch_duration < 0.3 and movement < 15:  # Quick tap
-                    print("Click detected!")
-                    pyautogui.click(screen_x, screen_y)
-            last_x, last_y = None, None
-            touch_start_time = None
-        elif event == 2:  # Touch move
-            if last_x is None:  # First touch
+            if event == 0:  # Touch down
                 pyautogui.mouseDown(screen_x, screen_y)
+                last_x, last_y = screen_x, screen_y
                 touch_start_time = time.time()
                 touch_start_x, touch_start_y = screen_x, screen_y
-            pyautogui.moveTo(screen_x, screen_y)
-            last_x, last_y = screen_x, screen_y
-            no_touch_time = None  # Reset no-touch timer
-
-    else:  # No touch
-        if last_x is not None and last_y is not None:
-            if no_touch_time is None:
-                no_touch_time = time.time()
-            elif time.time() - no_touch_time >= 0.1:  # 0.1s debounce
-                touch_duration = time.time() - touch_start_time if touch_start_time else 0
-                movement = abs(last_x - touch_start_x) + abs(last_y - touch_start_y)
-                if touch_duration < 0.3 and movement < 15:  # Quick tap
-                    print("Click detected (no-touch fallback)!")
-                    pyautogui.click(last_x, last_y)
-                pyautogui.mouseUp(last_x, last_y)
+            elif event == 1:  # Touch up
+                if last_x is not None and last_y is not None:
+                    pyautogui.mouseUp(screen_x, screen_y)
+                    touch_duration = time.time() - touch_start_time if touch_start_time else 0
+                    movement = abs(screen_x - touch_start_x) + abs(screen_y - touch_start_y)
+                    if touch_duration < 0.3 and movement < 15:
+                        print("Click detected!")
+                        pyautogui.click(screen_x, screen_y)
                 last_x, last_y = None, None
                 touch_start_time = None
+            elif event == 2:  # Touch move
+                if last_x is None:
+                    pyautogui.mouseDown(screen_x, screen_y)
+                    touch_start_time = time.time()
+                    touch_start_x, touch_start_y = screen_x, screen_y
+                pyautogui.moveTo(screen_x, screen_y)
+                last_x, last_y = screen_x, screen_y
                 no_touch_time = None
 
-    time.sleep(0.05)
-EOF
-
-# Make the touchscreen script executable
-chmod +x /home/pi/ft5316_touch.py
-
-# Create systemd service to run at boot
-echo "Creating systemd service for auto-start..."
-sudo bash -c 'cat << "EOF" > /etc/systemd/system/ft5316-touchscreen.service
-[Unit]
-Description=FT5316 Touchscreen Driver
-After=graphical.target
-
-[Service]
-User=pi
-Environment=DISPLAY=:0
-ExecStartPre=/bin/sleep 10
-ExecStart=/usr/bin/python3 /home/pi/ft5316_touch.py
-Restart=always
-WorkingDirectory=/home/pi
-
-[Install]
-WantedBy=graphical.target
-EOF'
-
-# Enable and start the service
-sudo systemctl daemon-reload
-sudo systemctl enable ft5316-touchscreen.service
-sudo systemctl start ft5316-touchscreen.service
-
-echo "Setup complete!"
-echo "Touchscreen driver is now set to run at boot."
-echo "Rebooting in 5 seconds to apply changes..."
-sleep 5
-sudo reboot
+        else:
+            if last_x is not None and last_y is not None:
+                if no_touch_time is None:
+                    no_touch_time = time.time()
+                elif time.time() - no_touch_time >= 0.1:
+                    touch_duration = time.time() - touch_start_time if touch_start_time else 0
+                    movement = abs(last_x - touch_start_x) + abs(last_y - touch_start_y)
+                    if touch_duration < 0.3 and movement < 15:
+                        print("Click detected (no-touch fallback)!")
