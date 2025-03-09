@@ -21,59 +21,93 @@ else
     echo "I2C is already enabled in $CONFIG_FILE."
 fi
 
-# Initial resolution setup (user choice for config.txt)
-echo "Select initial display resolution (re-run script if screen changes):"
-echo "1) PI default (no custom HDMI settings)"
-echo "2) 1024x600 - GX Touch 70"
-echo "3) 800x480 - GX Touch 50"
-read -p "Enter your choice (1-3): " choice
+# Detect screen type from EEPROM at 0x50, offset 0x53
+echo "Detecting screen type from EEPROM..."
+I2C_BUS=$(i2cdetect -l | grep -o "i2c-[0-9]*" | head -1 | cut -d'-' -f2)  # Auto-detect bus
+EEPROM_ADDR=0x50
+OFFSET=0x53
+MODEL_ID=$(i2cget -y $I2C_BUS $EEPROM_ADDR $OFFSET 2>/dev/null || echo "0x00")
 
-case $choice in
-    1)
-        echo "Using PI default display resolution..."
-        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-        ;;
-    2)
-        echo "Setting HDMI screen resolution to 1024x600..."
-        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> ${CONFIG_FILE}"
-        ;;
-    3)
-        echo "Setting HDMI screen resolution to 800x480..."
-        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> ${CONFIG_FILE}"
-        ;;
-    *)
-        echo "Invalid option. Exiting..."
-        exit 1
-        ;;
-esac
+if [ "$MODEL_ID" = "0x35" ]; then
+    echo "Detected GX Touch 50 (800x480)"
+    SCREEN_WIDTH=800
+    SCREEN_HEIGHT=480
+    HDMI_GROUP=2
+    HDMI_MODE=87
+    HDMI_CVT="800 480 60 6 0 0 0"
+elif [ "$MODEL_ID" = "0x37" ]; then
+    echo "Detected GX Touch 70 (1024x600)"
+    SCREEN_WIDTH=1024
+    SCREEN_HEIGHT=600
+    HDMI_GROUP=2
+    HDMI_MODE=87
+    HDMI_CVT="1024 600 60 6 0 0 0"
+else
+    echo "Unknown screen type (ID: $MODEL_ID), prompting for manual choice..."
+    echo "Select display resolution:"
+    echo "1) PI default (no custom HDMI settings)"
+    echo "2) 1024x600 - GX Touch 70"
+    echo "3) 800x480 - GX Touch 50"
+    read -p "Enter your choice (1-3): " choice
+    case $choice in
+        1)
+            echo "Using PI default display resolution..."
+            sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
+            sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
+            sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
+            sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
+            SCREEN_WIDTH=1280  # Default for Python
+            SCREEN_HEIGHT=800
+            ;;
+        2)
+            echo "Setting HDMI screen resolution to 1024x600..."
+            SCREEN_WIDTH=1024
+            SCREEN_HEIGHT=600
+            HDMI_GROUP=2
+            HDMI_MODE=87
+            HDMI_CVT="1024 600 60 6 0 0 0"
+            ;;
+        3)
+            echo "Setting HDMI screen resolution to 800x480..."
+            SCREEN_WIDTH=800
+            SCREEN_HEIGHT=480
+            HDMI_GROUP=2
+            HDMI_MODE=87
+            HDMI_CVT="800 480 60 6 0 0 0"
+            ;;
+        *)
+            echo "Invalid option, defaulting to 800x480..."
+            SCREEN_WIDTH=800
+            SCREEN_HEIGHT=480
+            HDMI_GROUP=2
+            HDMI_MODE=87
+            HDMI_CVT="800 480 60 6 0 0 0"
+            ;;
+    esac
+fi
+
+# Write HDMI settings to config.txt if detected or chosen
+if [ -n "$HDMI_CVT" ]; then
+    echo "Setting HDMI screen resolution to ${SCREEN_WIDTH}x${SCREEN_HEIGHT}..."
+    sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
+    sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
+    sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
+    sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
+    sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
+    sudo bash -c "echo 'hdmi_group=${HDMI_GROUP}' >> ${CONFIG_FILE}"
+    sudo bash -c "echo 'hdmi_mode=${HDMI_MODE}' >> ${CONFIG_FILE}"
+    sudo bash -c "echo 'hdmi_cvt=${HDMI_CVT}' >> ${CONFIG_FILE}"
+fi
 
 # Create the touchscreen script with dynamic detection
 echo "Setting up touchscreen script..."
-cat << 'EOF' > /home/pi/ft5316_touch.py
+cat << EOF > /home/pi/ft5316_touch.py
 import smbus
 import time
 import pyautogui
 import os
 import sys
 import signal
-import subprocess
 
 # Signal handler for clean exit
 def signal_handler(sig, frame):
@@ -100,11 +134,11 @@ def detect_screen_type():
             print("Detected GX Touch 70 (1024x600)")
             return 1024, 600
         else:
-            print(f"Unknown screen type (ID: {hex(model_id)}), defaulting to 800x480")
-            return 800, 480
+            print(f"Unknown screen type (ID: {hex(model_id)}), defaulting to config.txt settings")
+            return $SCREEN_WIDTH, $SCREEN_HEIGHT  # Use config.txt values
     except Exception as e:
-        print(f"Error detecting screen type: {e}, defaulting to 800x480")
-        return 800, 480
+        print(f"Error detecting screen type: {e}, defaulting to config.txt settings")
+        return $SCREEN_WIDTH, $SCREEN_HEIGHT
 
 print("Script starting...")
 def detect_i2c_bus():
