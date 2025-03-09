@@ -2,6 +2,7 @@
 
 This repository provides a setup script for configuring the Victron Energy Touch GX 7 with a Raspberry Pi 5 to enable touch functionality over HDMI. The script updates the system, installs required packages, configures the touch driver, and sets up a systemd service to run the driver at boot.
 
+Tested with Pi5 and Pi4 running Raspbian 
 
 ## Prerequisites
 
