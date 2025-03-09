@@ -67,67 +67,34 @@ read -p "Enter your choice (1-3): " choice
 case $choice in
     1)
         echo "Using PI default display resolution..."
-        sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_group/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
-        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
         SCREEN_WIDTH=1280
         SCREEN_HEIGHT=800
         ;;
     2)
         echo "Setting HDMI screen resolution to 1024x600..."
-        sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_group/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
-        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> $CONFIG_FILE"
-        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
         SCREEN_WIDTH=1024
         SCREEN_HEIGHT=600
         ;;
     3)
         echo "Setting HDMI screen resolution to 800x480..."
-        sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_group/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
-        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> $CONFIG_FILE"
-        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
         SCREEN_WIDTH=800
         SCREEN_HEIGHT=480
         ;;
     *)
         echo "Invalid option, defaulting to 800x480..."
-        sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_group/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
-        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> $CONFIG_FILE"
-        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
         SCREEN_WIDTH=800
         SCREEN_HEIGHT=480
         ;;
 esac
+
+# Set resolution using cmdline.txt
+echo "Setting resolution in /boot/firmware/cmdline.txt..."
+sudo sed -i '/video=HDMI-A-1/d' /boot/firmware/cmdline.txt
+sudo bash -c "echo 'video=HDMI-A-1:${SCREEN_WIDTH}x${SCREEN_HEIGHT}M@60D' >> /boot/firmware/cmdline.txt"
+
+# Add touchscreen configuration to config.txt
+echo "Adding touchscreen configuration to /boot/firmware/config.txt..."
+sudo bash -c "echo 'dtoverlay=ads7846,cs=1,penirq=25,penirq_pull=2,speed=50000,keep_vref_on=0,swapxy=0,pmax=255,xohms=150,xmin=200,xmax=3900,ymin=200,ymax=3900' >> /boot/firmware/config.txt"
 
 # Create the touchscreen script with fixed resolution
 echo "Setting up touchscreen script..."
