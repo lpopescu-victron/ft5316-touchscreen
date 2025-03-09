@@ -183,33 +183,44 @@ EOF
 sudo chown pi:pi /home/pi/ft5316_touch.py
 chmod +x /home/pi/ft5316_touch.py
 
-# Create a boot script to adjust resolution
+# Create a boot script to adjust resolution with logging
 echo "Creating boot script for dynamic resolution..."
 cat << 'EOF' > /home/pi/adjust_resolution.sh
 #!/bin/bash
 
 CONFIG_FILE="/boot/firmware/config.txt"
-I2C_BUS=$(i2cdetect -l | grep -o "i2c-[0-9]*" | head -1 | cut -d'-' -f2)
-EEPROM_ADDR=0x50
-OFFSET=0x53
-MODEL_ID=$(i2cget -y $I2C_BUS $EEPROM_ADDR $OFFSET 2>/dev/null || echo "0x00")
+LOG_FILE="/var/log/adjust_resolution.log"
+echo "$(date): Starting resolution adjustment..." >> $LOG_FILE
 
-if [ "$MODEL_ID" = "0x35" ]; then
+I2C_BUS=$(i2cdetect -l | grep -o "i2c-[0-9]*" | head -1 | cut -d'-' -f2)
+if [ -z "$I2C_BUS" ]; then
+    echo "$(date): No I2C bus found, defaulting to 800x480" >> $LOG_FILE
     RESOLUTION="800x480"
     HDMI_CVT="800 480 60 6 0 0 0"
-elif [ "$MODEL_ID" = "0x37" ]; then
-    RESOLUTION="1024x600"
-    HDMI_CVT="1024 600 60 6 0 0 0"
 else
-    RESOLUTION="800x480"
-    HDMI_CVT="800 480 60 6 0 0 0"
+    MODEL_ID=$(i2cget -y $I2C_BUS $EEPROM_ADDR 0x53 2>/dev/null || echo "0x00")
+    echo "$(date): Detected I2C bus $I2C_BUS, MODEL_ID=$MODEL_ID" >> $LOG_FILE
+
+    if [ "$MODEL_ID" = "0x35" ]; then
+        echo "$(date): Detected GX Touch 50 (800x480)" >> $LOG_FILE
+        RESOLUTION="800x480"
+        HDMI_CVT="800 480 60 6 0 0 0"
+    elif [ "$MODEL_ID" = "0x37" ]; then
+        echo "$(date): Detected GX Touch 70 (1024x600)" >> $LOG_FILE
+        RESOLUTION="1024x600"
+        HDMI_CVT="1024 600 60 6 0 0 0"
+    else
+        echo "$(date): Unknown screen type (ID: $MODEL_ID), defaulting to 800x480" >> $LOG_FILE
+        RESOLUTION="800x480"
+        HDMI_CVT="800 480 60 6 0 0 0"
+    fi
 fi
 
 # Check current config
 CURRENT_CVT=$(grep "hdmi_cvt" $CONFIG_FILE | cut -d'=' -f2)
 
 if [ "$CURRENT_CVT" != "$HDMI_CVT" ]; then
-    echo "Updating resolution to $RESOLUTION..."
+    echo "$(date): Updating resolution to $RESOLUTION..." >> $LOG_FILE
     sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
     sudo sed -i '/hdmi_group/d' $CONFIG_FILE
     sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
@@ -218,9 +229,10 @@ if [ "$CURRENT_CVT" != "$HDMI_CVT" ]; then
     sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
     sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
     sudo bash -c "echo 'hdmi_cvt=$HDMI_CVT' >> $CONFIG_FILE"
+    echo "$(date): Resolution updated, rebooting..." >> $LOG_FILE
     sudo reboot
 else
-    echo "Resolution already set to $RESOLUTION"
+    echo "$(date): Resolution already set to $RESOLUTION" >> $LOG_FILE
 fi
 EOF
 
@@ -269,16 +281,18 @@ WantedBy=graphical.target
 EOF'
 
 # Enable and start services
+echo "Enabling and starting services..."
 sudo systemctl daemon-reload
 sudo systemctl enable adjust-resolution.service
 sudo systemctl enable ft5316-touchscreen.service
 sudo systemctl start adjust-resolution.service
 sudo systemctl start ft5316-touchscreen.service
 
+# Clean up the downloaded script file
+echo "Cleaning up downloaded script file..."
+rm -f "$0"
 echo "Setup complete!"
 echo "Resolution will adjust at every boot based on screen type."
-echo "Cleaning up downloaded script file..."
-rm -f "$0"  # Delete this script file
-echo "Rebooting in 5 seconds to apply changes..."
-sleep 5
+echo "Rebooting in 10 seconds to apply changes..."
+sleep 10  # Increased to ensure services start and file deletion completes
 sudo reboot
