@@ -2,7 +2,7 @@
 
 echo "Starting touchscreen setup for Raspberry Pi..."
 
-# Stop and disable any existing services to avoid conflicts
+# Stop and disable any existing services
 echo "Stopping and disabling existing services..."
 sudo systemctl stop ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to stop"
 sudo systemctl disable ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to disable"
@@ -16,7 +16,7 @@ sudo rm -f /etc/systemd/system/adjust-resolution.service
 sudo systemctl daemon-reload
 
 # Kill any running instances
-echo "Terminating any running instances of ft5316_touch.py or adjust_resolution.sh..."
+echo "Terminating any running instances..."
 sudo pkill -f ft5316_touch.py 2>/dev/null || echo "No ft5316_touch.py processes found"
 sudo pkill -f adjust_resolution.sh 2>/dev/null || echo "No adjust_resolution.sh processes found"
 
@@ -33,6 +33,17 @@ sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus i2c-too
 # Install pyautogui
 echo "Installing pyautogui..."
 pip3 install pyautogui --break-system-packages
+
+# Check and switch to X11 if Wayland is in use
+echo "Checking display server mode..."
+CURRENT_DESKTOP=$(echo $XDG_SESSION_TYPE)
+if [ "$CURRENT_DESKTOP" = "wayland" ]; then
+    echo "Wayland detected, switching to X11..."
+    sudo raspi-config nonint do_wayland W2  # W2 sets X11
+    echo "Switched to X11. A reboot may be required after setup."
+else
+    echo "X11 already in use, no changes needed."
+fi
 
 # Enable I2C in config.txt
 echo "Checking and enabling I2C..."
@@ -58,6 +69,8 @@ case $choice in
         sudo sed -i '/hdmi_group/d' $CONFIG_FILE
         sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
         sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
+        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
+        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
         SCREEN_WIDTH=1280
         SCREEN_HEIGHT=800
         ;;
@@ -67,10 +80,14 @@ case $choice in
         sudo sed -i '/hdmi_group/d' $CONFIG_FILE
         sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
         sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
+        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
+        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
         sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> $CONFIG_FILE"
+        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
+        sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
         SCREEN_WIDTH=1024
         SCREEN_HEIGHT=600
         ;;
@@ -80,10 +97,14 @@ case $choice in
         sudo sed -i '/hdmi_group/d' $CONFIG_FILE
         sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
         sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
+        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
+        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
         sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> $CONFIG_FILE"
+        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
+        sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
         SCREEN_WIDTH=800
         SCREEN_HEIGHT=480
         ;;
@@ -93,10 +114,14 @@ case $choice in
         sudo sed -i '/hdmi_group/d' $CONFIG_FILE
         sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
         sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
+        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
+        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
         sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> $CONFIG_FILE"
+        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
+        sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
         SCREEN_WIDTH=800
         SCREEN_HEIGHT=480
         ;;
@@ -253,7 +278,8 @@ sudo systemctl start ft5316-touchscreen.service
 # Clean up the downloaded script file
 echo "Cleaning up downloaded script file..."
 rm -f "$0"
-echo "Setup complete! If you change the screen, rerun this script."
+echo "Setup complete! If you change the screen, rerun this script with:"
+echo "wget -O setup_touchscreen.sh https://raw.githubusercontent.com/lpopescu-victron/ft5316-touchscreen/main/setup_touchscreen.sh && chmod +x setup_touchscreen.sh && ./setup_touchscreen.sh"
 echo "Rebooting in 5 seconds to apply changes..."
 sleep 5
 sudo reboot
