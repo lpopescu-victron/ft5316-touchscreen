@@ -277,6 +277,8 @@ sudo systemctl start ft5316-touchscreen.service
 
 echo "Setup complete!"
 echo "Resolution will adjust at every boot based on screen type."
+echo "Cleaning up downloaded script file..."
+rm -f "$0"  # Delete this script file
 echo "Rebooting in 5 seconds to apply changes..."
 sleep 5
 sudo reboot
