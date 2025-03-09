@@ -2,6 +2,29 @@
 
 echo "Starting touchscreen setup for Raspberry Pi..."
 
+# Stop and disable any existing services to avoid conflicts
+echo "Stopping and disabling existing services..."
+sudo systemctl stop ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to stop"
+sudo systemctl disable ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to disable"
+sudo systemctl stop adjust-resolution.service 2>/dev/null || echo "No adjust-resolution.service to stop"
+sudo systemctl disable adjust-resolution.service 2>/dev/null || echo "No adjust-resolution.service to disable"
+
+# Remove old service files
+echo "Removing old service files..."
+sudo rm -f /etc/systemd/system/ft5316-touchscreen.service
+sudo rm -f /etc/systemd/system/adjust-resolution.service
+sudo systemctl daemon-reload  # Reload systemd to clear old definitions
+
+# Kill any running instances of related scripts
+echo "Terminating any running instances of ft5316_touch.py or adjust_resolution.sh..."
+sudo pkill -f ft5316_touch.py 2>/dev/null || echo "No ft5316_touch.py processes found"
+sudo pkill -f adjust_resolution.sh 2>/dev/null || echo "No adjust_resolution.sh processes found"
+
+# Clean up old script files
+echo "Removing old script files..."
+sudo rm -f /home/pi/ft5316_touch.py
+sudo rm -f /home/pi/adjust_resolution.sh
+
 # Update system and install prerequisites
 echo "Updating system and installing base packages..."
 sudo apt update
@@ -156,7 +179,8 @@ while True:
         time.sleep(1)
 EOF
 
-# Make the touchscreen script executable
+# Set ownership and make executable
+sudo chown pi:pi /home/pi/ft5316_touch.py
 chmod +x /home/pi/ft5316_touch.py
 
 # Create a boot script to adjust resolution
@@ -200,7 +224,8 @@ else
 fi
 EOF
 
-# Make the boot script executable
+# Set ownership and make executable
+sudo chown pi:pi /home/pi/adjust_resolution.sh
 chmod +x /home/pi/adjust_resolution.sh
 
 # Create systemd service for boot script
