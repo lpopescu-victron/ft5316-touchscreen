@@ -11,17 +11,50 @@ sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus
 echo "Installing pyautogui..."
 pip3 install pyautogui --break-system-packages
 
-# Set HDMI screen resolution to 1024x600 by modifying the firmware config file
-echo "Setting HDMI screen resolution to 1024x600..."
+# Ask user for display resolution option
+echo "Select display resolution option:"
+echo "1) PI default (no custom HDMI settings)"
+echo "2) 1024x600"
+echo "3) 800x480"
+read -p "Enter your choice (1-3): " choice
+
 CONFIG_FILE="/boot/firmware/config.txt"
-sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
-sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
-sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
-sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> ${CONFIG_FILE}"
+
+case $choice in
+    1)
+        echo "Using PI default display resolution. Removing any custom HDMI settings..."
+        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
+        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
+        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
+        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
+        ;;
+    2)
+        echo "Setting HDMI screen resolution to 1024x600..."
+        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
+        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
+        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
+        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
+        sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
+        sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
+        sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
+        sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> ${CONFIG_FILE}"
+        ;;
+    3)
+        echo "Setting HDMI screen resolution to 800x480..."
+        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
+        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
+        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
+        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
+        sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
+        sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
+        sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
+        sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> ${CONFIG_FILE}"
+        ;;
+    *)
+        echo "Invalid option. Exiting..."
+        exit 1
+        ;;
+esac
 
 # Create the touchscreen script
 echo "Setting up touchscreen script..."
@@ -132,7 +165,7 @@ while True:
     time.sleep(0.05)
 EOF
 
-# Make the script executable
+# Make the touchscreen script executable
 chmod +x /home/pi/ft5316_touch.py
 
 # Create systemd service to run at boot
