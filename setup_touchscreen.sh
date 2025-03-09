@@ -1,8 +1,59 @@
+import smbus
+import time
+import subprocess
+import os
+import sys
+import signal
+
+# Signal handler for clean exit
+def signal_handler(sig, frame):
+    print("Received signal to exit, shutting down...")
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
+
+FT5316_ADDR = 0x38
+EEPROM_ADDR1 = 0x50
+EEPROM_ADDR2 = 0x51
+SCREEN_WIDTH = 800  # GX Touch 50
+SCREEN_HEIGHT = 480
+
+print("Script starting...")
+def detect_i2c_bus():
+    print("Detecting I2C bus...")
+    for bus_num in range(0, 100):
+        dev_path = f"/dev/i2c-{bus_num}"
+        if os.path.exists(dev_path):
+            try:
+                bus = smbus.SMBus(bus_num)
+                bus.read_byte_data(FT5316_ADDR, 0x00)
+                bus.read_byte_data(EEPROM_ADDR1, 0x00)
+                bus.read_byte_data(EEPROM_ADDR2, 0x00)
+                print(f"Found FT5316 (0x38), 0x50, and 0x51 on I2C bus {bus_num}")
+                return bus_num
+            except IOError:
+                continue
+    raise RuntimeError("No I2C bus found with FT5316 (0x38), 0x50, and 0x51")
+
+try:
+    bus_number = detect_i2c_bus()
+    bus = smbus.SMBus(bus_number)
+except RuntimeError as e:
+    print(f"Error: {e}")
+    sys.exit(1)
+
+print("Starting touchscreen control. Ctrl+C or SIGTERM to stop.")
+last_event = None
+last_x, last_y = None, None
+touch_start_time = None
+touch_start_x, touch_start_y = None, None
+no_touch_time = None
+
 while True:
     try:
         regs = bus.read_i2c_block_data(FT5316_ADDR, 0x00, 16)
         touch_points = regs[2]
-        print(f"Touch points: {touch_points}, Raw regs: {regs}")
         if touch_points > 0:
             event = (regs[3] >> 6) & 0x03
             x = ((regs[3] & 0x0F) << 8) | regs[4]
@@ -16,34 +67,34 @@ while True:
                 last_event = event
 
             if event == 0:  # Touch down
-                pyautogui.mouseDown(screen_x, screen_y)
+                subprocess.run(["ydotool", "mousemove", str(screen_x), str(screen_y)])
+                subprocess.run(["ydotool", "click", "--down", "0xC0"])
                 print("Mouse down")
                 last_x, last_y = screen_x, screen_y
                 touch_start_time = time.time()
                 touch_start_x, touch_start_y = screen_x, screen_y
             elif event == 1:  # Touch up
                 if last_x is not None and last_y is not None:
-                    pyautogui.mouseUp(screen_x, screen_y)
+                    subprocess.run(["ydotool", "click", "--up", "0xC0"])
                     print("Mouse up")
                     touch_duration = time.time() - touch_start_time if touch_start_time else 0
                     movement = abs(screen_x - touch_start_x) + abs(screen_y - touch_start_y)
                     if touch_duration < 0.3 and movement < 15:
                         print("Click detected!")
-                        pyautogui.click(screen_x, screen_y)
+                        subprocess.run(["ydotool", "click", "0xC0"])
                 last_x, last_y = None, None
                 touch_start_time = None
             elif event == 2:  # Touch move
                 if last_x is None:
-                    pyautogui.mouseDown(screen_x, screen_y)
+                    subprocess.run(["ydotool", "mousemove", str(screen_x), str(screen_y)])
+                    subprocess.run(["ydotool", "click", "--down", "0xC0"])
                     print("Mouse down (move)")
                     touch_start_time = time.time()
                     touch_start_x, touch_start_y = screen_x, screen_y
-                pyautogui.moveTo(screen_x, screen_y)
+                subprocess.run(["ydotool", "mousemove", str(screen_x), str(screen_y)])
                 print("Mouse moved")
                 last_x, last_y = screen_x, screen_y
                 no_touch_time = None
-            else:
-                print(f"Unhandled event: {event}")
 
         else:
             if last_x is not None and last_y is not None:
@@ -54,8 +105,8 @@ while True:
                     movement = abs(last_x - touch_start_x) + abs(last_y - touch_start_y)
                     if touch_duration < 0.3 and movement < 15:
                         print("Click detected (no-touch fallback)!")
-                        pyautogui.click(last_x, last_y)
-                    pyautogui.mouseUp(last_x, last_y)
+                        subprocess.run(["ydotool", "click", "0xC0"])
+                    subprocess.run(["ydotool", "click", "--up", "0xC0"])
                     print("Mouse up (no touch)")
                     last_x, last_y = None, None
                     touch_start_time = None
