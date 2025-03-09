@@ -89,7 +89,9 @@ esac
 # Manually define the modeline for 800x480
 MODELINE="\"800x480_60.00\" 29.50 800 824 896 992 480 483 493 500 -hsync +vsync"
 
-# Identify the correct display output
+# Detect the connected display output
+echo "Checking connected displays..."
+xrandr
 DISPLAY_OUTPUT=$(xrandr | grep " connected" | awk '{print $1}')
 if [ -z "$DISPLAY_OUTPUT" ]; then
     echo "Error: No connected display found!"
@@ -99,6 +101,8 @@ echo "Using display output: $DISPLAY_OUTPUT"
 
 # Add the new mode and apply it
 echo "Adding new mode and applying resolution..."
+echo "Modeline: $MODELINE"
+echo "Display Output: $DISPLAY_OUTPUT"
 xrandr --newmode $MODELINE
 xrandr --addmode $DISPLAY_OUTPUT "800x480_60.00"
 xrandr --output $DISPLAY_OUTPUT --mode "800x480_60.00"
