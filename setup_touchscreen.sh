@@ -11,6 +11,18 @@ sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus
 echo "Installing pyautogui..."
 pip3 install pyautogui --break-system-packages
 
+# Set HDMI screen resolution to 1024x600 by modifying the firmware config file
+echo "Setting HDMI screen resolution to 1024x600..."
+CONFIG_FILE="/boot/firmware/config.txt"
+sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
+sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
+sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
+sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
+sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
+sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
+sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
+sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> ${CONFIG_FILE}"
+
 # Create the touchscreen script
 echo "Setting up touchscreen script..."
 cat << 'EOF' > /home/pi/ft5316_touch.py
