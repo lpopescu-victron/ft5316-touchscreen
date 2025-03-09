@@ -1,86 +1,30 @@
-#!/bin/bash
-
-echo "Starting touchscreen setup for Raspberry Pi 5..."
-
-# Update system and install prerequisites
-echo "Updating system and installing base packages..."
-sudo apt update
-sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus
-
-# Install pyautogui with --break-system-packages
-echo "Installing pyautogui..."
-pip3 install pyautogui --break-system-packages
-
-# Ask user for display resolution option
-echo "Select display resolution option:"
-echo "1) PI default (no custom HDMI settings)"
-echo "2) 1024x600"
-echo "3) 800x480"
-read -p "Enter your choice (1-3): " choice
-
-CONFIG_FILE="/boot/firmware/config.txt"
-
-case $choice in
-    1)
-        echo "Using PI default display resolution. Removing any custom HDMI settings..."
-        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-        ;;
-    2)
-        echo "Setting HDMI screen resolution to 1024x600..."
-        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> ${CONFIG_FILE}"
-        ;;
-    3)
-        echo "Setting HDMI screen resolution to 800x480..."
-        sudo sed -i '/hdmi_force_hotplug/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_group/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_mode/d' ${CONFIG_FILE}
-        sudo sed -i '/hdmi_cvt/d' ${CONFIG_FILE}
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_group=2' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_mode=87' >> ${CONFIG_FILE}"
-        sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> ${CONFIG_FILE}"
-        ;;
-    *)
-        echo "Invalid option. Exiting..."
-        exit 1
-        ;;
-esac
-
-# Create the touchscreen script
-echo "Setting up touchscreen script..."
-cat << 'EOF' > /home/pi/ft5316_touch.py
 import smbus
 import time
 import pyautogui
 import os
 
 FT5316_ADDR = 0x38
-SCREEN_WIDTH = 1024
-SCREEN_HEIGHT = 600
+EEPROM_ADDR1 = 0x50
+EEPROM_ADDR2 = 0x51
+SCREEN_WIDTH = 1024  # Adjust to your display resolution
+SCREEN_HEIGHT = 600  # Adjust to your display resolution
 
 def detect_i2c_bus():
-    """Detect the I2C bus with the FT5316 touchscreen (address 0x38)."""
-    for bus_num in range(20):  # Check buses 0-19
+    """Detect the I2C bus with FT5316 (0x38), 0x50, and 0x51 present."""
+    for bus_num in range(100):  # Check buses 0-99
         dev_path = f"/dev/i2c-{bus_num}"
         if os.path.exists(dev_path):
             try:
                 bus = smbus.SMBus(bus_num)
-                bus.read_byte_data(FT5316_ADDR, 0x00)
-                print(f"FT5316 found on I2C bus {bus_num}")
+                # Test all three addresses
+                bus.read_byte_data(FT5316_ADDR, 0x00)  # FT5316
+                bus.read_byte_data(EEPROM_ADDR1, 0x00)  # 0x50
+                bus.read_byte_data(EEPROM_ADDR2, 0x00)  # 0x51
+                print(f"Found FT5316 (0x38), 0x50, and 0x51 on I2C bus {bus_num}")
                 return bus_num
             except IOError:
                 continue
-    raise RuntimeError("FT5316 touchscreen not found on any I2C bus")
+    raise RuntimeError("No I2C bus found with FT5316 (0x38), 0x50, and 0x51")
 
 try:
     bus_number = detect_i2c_bus()
@@ -163,37 +107,3 @@ while True:
                 no_touch_time = None
 
     time.sleep(0.05)
-EOF
-
-# Make the touchscreen script executable
-chmod +x /home/pi/ft5316_touch.py
-
-# Create systemd service to run at boot
-echo "Creating systemd service for auto-start..."
-sudo bash -c 'cat << "EOF" > /etc/systemd/system/ft5316-touchscreen.service
-[Unit]
-Description=FT5316 Touchscreen Driver
-After=graphical.target
-
-[Service]
-User=pi
-Environment=DISPLAY=:0
-ExecStartPre=/bin/sleep 10
-ExecStart=/usr/bin/python3 /home/pi/ft5316_touch.py
-Restart=always
-WorkingDirectory=/home/pi
-
-[Install]
-WantedBy=graphical.target
-EOF'
-
-# Enable and start the service
-sudo systemctl daemon-reload
-sudo systemctl enable ft5316-touchscreen.service
-sudo systemctl start ft5316-touchscreen.service
-
-echo "Setup complete!"
-echo "Touchscreen driver is now set to run at boot."
-echo "Rebooting in 5 seconds to apply changes..."
-sleep 5
-sudo reboot
