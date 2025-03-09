@@ -86,7 +86,7 @@ case $choice in
         sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> $CONFIG_FILE"
-        sudo bash -c "echo 'disable_overscan.WordBoundary()1' >> $CONFIG_FILE"
+        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
         sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
         SCREEN_WIDTH=1024
         SCREEN_HEIGHT=600
@@ -164,7 +164,8 @@ def detect_i2c_bus():
                 bus.read_byte_data(EEPROM_ADDR2, 0x00)
                 print(f"Found FT5316 (0x38), 0x50, and 0x51 on I2C bus {bus_num}")
                 return bus_num
-            except IOError:
+            except IOError as e:
+                print(f"Error on bus {bus_num}: {e}")
                 continue
     raise RuntimeError("No I2C bus found with FT5316 (0x38), 0x50, and 0x51")
 
@@ -200,11 +201,13 @@ while True:
                 last_event = event
 
             if event == 0:  # Touch down
+                print("Touch down detected")
                 pyautogui.mouseDown(screen_x, screen_y)
                 last_x, last_y = screen_x, screen_y
                 touch_start_time = time.time()
                 touch_start_x, touch_start_y = screen_x, screen_y
             elif event == 1:  # Touch up
+                print("Touch up detected")
                 if last_x is not None and last_y is not None:
                     pyautogui.mouseUp(screen_x, screen_y)
                     touch_duration = time.time() - touch_start_time if touch_start_time else 0
@@ -215,6 +218,7 @@ while True:
                 last_x, last_y = None, None
                 touch_start_time = None
             elif event == 2:  # Touch move
+                print("Touch move detected")
                 if last_x is None:
                     pyautogui.mouseDown(screen_x, screen_y)
                     touch_start_time = time.time()
