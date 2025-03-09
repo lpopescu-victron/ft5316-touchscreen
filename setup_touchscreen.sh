@@ -164,4 +164,49 @@ while True:
         if last_x is not None and last_y is not None:
             if no_touch_time is None:
                 no_touch_time = time.time()
-            eli
+            elif time.time() - no_touch_time >= 0.1:  # 0.1s debounce
+                touch_duration = time.time() - touch_start_time if touch_start_time else 0
+                movement = abs(last_x - touch_start_x) + abs(last_y - touch_start_y)
+                if touch_duration < 0.3 and movement < 15:  # Quick tap
+                    print("Click detected (no-touch fallback)!")
+                    pyautogui.click(last_x, last_y)
+                pyautogui.mouseUp(last_x, last_y)
+                last_x, last_y = None, None
+                touch_start_time = None
+                no_touch_time = None
+
+    time.sleep(0.05)
+EOF
+
+# Make the touchscreen script executable
+chmod +x /home/pi/ft5316_touch.py
+
+# Create systemd service to run at boot
+echo "Creating systemd service for auto-start..."
+sudo bash -c 'cat << "EOF" > /etc/systemd/system/ft5316-touchscreen.service
+[Unit]
+Description=FT5316 Touchscreen Driver
+After=graphical.target
+
+[Service]
+User=pi
+Environment=DISPLAY=:0
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/bin/python3 /home/pi/ft5316_touch.py
+Restart=always
+WorkingDirectory=/home/pi
+
+[Install]
+WantedBy=graphical.target
+EOF'
+
+# Enable and start the service
+sudo systemctl daemon-reload
+sudo systemctl enable ft5316-touchscreen.service
+sudo systemctl start ft5316-touchscreen.service
+
+echo "Setup complete!"
+echo "Touchscreen driver is now set to run at boot."
+echo "Rebooting in 5 seconds to apply changes..."
+sleep 5
+sudo reboot
