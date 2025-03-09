@@ -39,8 +39,10 @@ echo "Checking display server mode..."
 CURRENT_DESKTOP=$(echo $XDG_SESSION_TYPE)
 if [ "$CURRENT_DESKTOP" = "wayland" ]; then
     echo "Wayland detected, switching to X11..."
-    sudo raspi-config nonint do_wayland W2  # W2 sets X11
-    echo "Switched to X11. A reboot may be required after setup."
+    sudo bash -c "echo '[General]' > /etc/lightdm/lightdm.conf.d/10-force-x11.conf"
+    sudo bash -c "echo 'display-setup-script=/bin/true' >> /etc/lightdm/lightdm.conf.d/10-force-x11.conf"
+    sudo bash -c "echo 'display-setup-script=xrandr --output HDMI-1 --mode ${SCREEN_WIDTH}x${SCREEN_HEIGHT}' >> /etc/lightdm/lightdm.conf.d/10-force-x11.conf"
+    echo "Switched to X11. A reboot is required."
 else
     echo "X11 already in use, no changes needed."
 fi
