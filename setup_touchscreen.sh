@@ -86,21 +86,28 @@ case $choice in
         ;;
 esac
 
-# Generate modeline for the selected resolution
-echo "Generating modeline for ${SCREEN_WIDTH}x${SCREEN_HEIGHT}..."
-MODELINE=$(cvt $SCREEN_WIDTH $SCREEN_HEIGHT 60 | grep "Modeline" | sed 's/Modeline //')
+# Manually define the modeline for 800x480
+MODELINE="\"800x480_60.00\" 29.50 800 824 896 992 480 483 493 500 -hsync +vsync"
+
+# Identify the correct display output
+DISPLAY_OUTPUT=$(xrandr | grep " connected" | awk '{print $1}')
+if [ -z "$DISPLAY_OUTPUT" ]; then
+    echo "Error: No connected display found!"
+    exit 1
+fi
+echo "Using display output: $DISPLAY_OUTPUT"
 
 # Add the new mode and apply it
 echo "Adding new mode and applying resolution..."
 xrandr --newmode $MODELINE
-xrandr --addmode HDMI-2 "${SCREEN_WIDTH}x${SCREEN_HEIGHT}_60.00"
-xrandr --output HDMI-2 --mode "${SCREEN_WIDTH}x${SCREEN_HEIGHT}_60.00"
+xrandr --addmode $DISPLAY_OUTPUT "800x480_60.00"
+xrandr --output $DISPLAY_OUTPUT --mode "800x480_60.00"
 
 # Make the resolution persistent
 echo "Making resolution persistent..."
 sudo bash -c "echo 'xrandr --newmode $MODELINE' >> /etc/X11/Xsession.d/45custom_xrandr"
-sudo bash -c "echo 'xrandr --addmode HDMI-2 \"${SCREEN_WIDTH}x${SCREEN_HEIGHT}_60.00\"' >> /etc/X11/Xsession.d/45custom_xrandr"
-sudo bash -c "echo 'xrandr --output HDMI-2 --mode \"${SCREEN_WIDTH}x${SCREEN_HEIGHT}_60.00\"' >> /etc/X11/Xsession.d/45custom_xrandr"
+sudo bash -c "echo 'xrandr --addmode $DISPLAY_OUTPUT \"800x480_60.00\"' >> /etc/X11/Xsession.d/45custom_xrandr"
+sudo bash -c "echo 'xrandr --output $DISPLAY_OUTPUT --mode \"800x480_60.00\"' >> /etc/X11/Xsession.d/45custom_xrandr"
 
 # Create the touchscreen script with fixed resolution
 echo "Setting up touchscreen script..."
