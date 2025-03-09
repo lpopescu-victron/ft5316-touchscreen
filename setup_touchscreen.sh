@@ -28,7 +28,7 @@ sudo rm -f /home/pi/adjust_resolution.sh
 # Update system and install prerequisites
 echo "Updating system and installing base packages..."
 sudo apt update
-sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus i2c-tools
+sudo apt install -y python3-pip x11-xserver-utils x11-apps python3-smbus i2c-tools xserver-xorg-core
 
 # Install pyautogui
 echo "Installing pyautogui..."
@@ -41,7 +41,6 @@ if [ "$CURRENT_DESKTOP" = "wayland" ]; then
     echo "Wayland detected, switching to X11..."
     sudo bash -c "echo '[General]' > /etc/lightdm/lightdm.conf.d/10-force-x11.conf"
     sudo bash -c "echo 'display-setup-script=/bin/true' >> /etc/lightdm/lightdm.conf.d/10-force-x11.conf"
-    sudo bash -c "echo 'display-setup-script=xrandr --output HDMI-1 --mode ${SCREEN_WIDTH}x${SCREEN_HEIGHT}' >> /etc/lightdm/lightdm.conf.d/10-force-x11.conf"
     echo "Switched to X11. A reboot is required."
 else
     echo "X11 already in use, no changes needed."
@@ -87,14 +86,21 @@ case $choice in
         ;;
 esac
 
-# Set resolution using cmdline.txt
-echo "Setting resolution in /boot/firmware/cmdline.txt..."
-sudo sed -i '/video=HDMI-A-1/d' /boot/firmware/cmdline.txt
-sudo bash -c "echo 'video=HDMI-A-1:${SCREEN_WIDTH}x${SCREEN_HEIGHT}M@60D' >> /boot/firmware/cmdline.txt"
+# Generate modeline for the selected resolution
+echo "Generating modeline for ${SCREEN_WIDTH}x${SCREEN_HEIGHT}..."
+MODELINE=$(cvt $SCREEN_WIDTH $SCREEN_HEIGHT 60 | grep "Modeline" | sed 's/Modeline //')
 
-# Add touchscreen configuration to config.txt
-echo "Adding touchscreen configuration to /boot/firmware/config.txt..."
-sudo bash -c "echo 'dtoverlay=ads7846,cs=1,penirq=25,penirq_pull=2,speed=50000,keep_vref_on=0,swapxy=0,pmax=255,xohms=150,xmin=200,xmax=3900,ymin=200,ymax=3900' >> /boot/firmware/config.txt"
+# Add the new mode and apply it
+echo "Adding new mode and applying resolution..."
+xrandr --newmode $MODELINE
+xrandr --addmode HDMI-2 "${SCREEN_WIDTH}x${SCREEN_HEIGHT}_60.00"
+xrandr --output HDMI-2 --mode "${SCREEN_WIDTH}x${SCREEN_HEIGHT}_60.00"
+
+# Make the resolution persistent
+echo "Making resolution persistent..."
+sudo bash -c "echo 'xrandr --newmode $MODELINE' >> /etc/X11/Xsession.d/45custom_xrandr"
+sudo bash -c "echo 'xrandr --addmode HDMI-2 \"${SCREEN_WIDTH}x${SCREEN_HEIGHT}_60.00\"' >> /etc/X11/Xsession.d/45custom_xrandr"
+sudo bash -c "echo 'xrandr --output HDMI-2 --mode \"${SCREEN_WIDTH}x${SCREEN_HEIGHT}_60.00\"' >> /etc/X11/Xsession.d/45custom_xrandr"
 
 # Create the touchscreen script with fixed resolution
 echo "Setting up touchscreen script..."
