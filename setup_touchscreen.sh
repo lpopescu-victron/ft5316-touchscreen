@@ -56,77 +56,78 @@ else
     echo "I2C is already enabled in $CONFIG_FILE."
 fi
 
-# Manual resolution selection
-echo "Select display resolution for your screen:"
-echo "1) PI default (no custom HDMI settings)"
-echo "2) 1024x600 - GX Touch 70"
-echo "3) 800x480 - GX Touch 50"
-read -p "Enter your choice (1-3): " choice
+# Set resolution using cmdline.txt and config.txt as provided
+echo "Setting resolution to 800x480 using cmdline.txt and config.txt..."
+CMDLINE_FILE="/boot/firmware/cmdline.txt"
+CONFIG_FILE="/boot/firmware/config.txt"
 
-case $choice in
-    1)
-        echo "Using PI default display resolution..."
-        sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_group/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
-        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
-        SCREEN_WIDTH=1280
-        SCREEN_HEIGHT=800
-        ;;
-    2)
-        echo "Setting HDMI screen resolution to 1024x600..."
-        sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_group/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
-        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_cvt=1024 600 60 6 0 0 0' >> $CONFIG_FILE"
-        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
-        SCREEN_WIDTH=1024
-        SCREEN_HEIGHT=600
-        ;;
-    3)
-        echo "Setting HDMI screen resolution to 800x480..."
-        sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_group/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
-        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> $CONFIG_FILE"
-        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
-        SCREEN_WIDTH=800
-        SCREEN_HEIGHT=480
-        ;;
-    *)
-        echo "Invalid option, defaulting to 800x480..."
-        sudo sed -i '/hdmi_force_hotplug/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_group/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_mode/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_cvt/d' $CONFIG_FILE
-        sudo sed -i '/disable_overscan/d' $CONFIG_FILE
-        sudo sed -i '/hdmi_drive/d' $CONFIG_FILE
-        sudo bash -c "echo 'hdmi_force_hotplug=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_group=2' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_mode=87' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_cvt=800 480 60 6 0 0 0' >> $CONFIG_FILE"
-        sudo bash -c "echo 'disable_overscan=1' >> $CONFIG_FILE"
-        sudo bash -c "echo 'hdmi_drive=2' >> $CONFIG_FILE"
-        SCREEN_WIDTH=800
-        SCREEN_HEIGHT=480
-        ;;
-esac
+# Update cmdline.txt
+sudo bash -c "echo 'console=serial0,115200 console=tty1 root=PARTUUID=57607e47-02 rootfstype=ext4 fsck.repair=yes rootwait quiet splash plymouth.ignore-serial-consoles cfg80211.ieee80211_regdom=GB video=HDMI-A-1:800x480@60 video=HDMI-A-2:800x480@60' > $CMDLINE_FILE"
+
+# Update config.txt with provided settings
+sudo bash -c 'cat << EOF > $CONFIG_FILE
+# For more options and information see
+# http://rptl.io/configtxt
+# Some settings may impact device functionality. See link above for details
+
+# Uncomment some or all of these to enable the optional hardware interfaces
+#dtparam=i2c_arm=on
+#dtparam=i2s=on
+#dtparam=spi=on
+
+# Enable audio (loads snd_bcm2835)
+dtparam=audio=on
+
+# Additional overlays and parameters are documented
+# /boot/firmware/overlays/README
+
+# Automatically load overlays for detected cameras
+camera_auto_detect=1
+
+# Automatically load overlays for detected DSI displays
+display_auto_detect=1
+
+# Automatically load initramfs files, if found
+auto_initramfs=1
+
+# Enable DRM VC4 V3D driver
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+
+# Don\'t have the firmware create an initial video= setting in cmdline.txt.
+# Use the kernel\'s default instead.
+disable_fw_kms_setup=1
+
+# Run in 64-bit mode
+arm_64bit=1
+
+# Disable compensation for displays with overscan
+#disable_overscan=1
+
+# Run as fast as firmware / board allows
+arm_boost=1
+
+[cm4]
+# Enable host mode on the 2711 built-in XHCI USB controller.
+# This line should be removed if the legacy DWC2 controller is required
+# (e.g. for USB device mode) or if USB support is not required.
+otg_mode=1
+
+[cm5]
+dtoverlay=dwc2,dr_mode=host
+
+[all]
+dtparam=i2c_arm=on
+hdmi_force_hotplug=1
+hdmi_group=2
+hdmi_mode=87
+hdmi_cvt=800 480 60 6 0 0 0
+disable_overscan=1
+hdmi_drive=2
+EOF'
+
+SCREEN_WIDTH=800
+SCREEN_HEIGHT=480
 
 # Create the touchscreen script with ydotool
 echo "Setting up touchscreen script..."
@@ -151,8 +152,8 @@ EEPROM_ADDR1 = 0x50
 EEPROM_ADDR2 = 0x51
 SCREEN_WIDTH = $SCREEN_WIDTH
 SCREEN_HEIGHT = $SCREEN_HEIGHT
-MAX_X = SCREEN_WIDTH - 1  # 799 or 1023 depending on resolution
-MAX_Y = SCREEN_HEIGHT - 1  # 479 or 599 depending on resolution
+MAX_X = SCREEN_WIDTH - 1  # 799
+MAX_Y = SCREEN_HEIGHT - 1  # 479
 SCALING_FACTOR = 2
 
 print("Script starting...")
