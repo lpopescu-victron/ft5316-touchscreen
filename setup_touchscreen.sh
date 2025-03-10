@@ -15,6 +15,7 @@ sudo systemctl daemon-reload
 
 # Kill any running instances
 echo "Terminating any running instances..."
+sudo pkill -f ydotoold
 sudo pkill -f ft5316_touch.py 2>/dev/null || echo "No ft5316_touch.py processes found"
 
 # Clean up old script files
@@ -177,13 +178,19 @@ TimeoutStopSec=10
 WantedBy=graphical.target
 EOF
 
-# Enable and start ydotoold service as pi user
+# Enable and start ydotoold service as root with XAUTHORITY
 echo "Starting ydotoold service..."
 sudo cp /usr/lib/systemd/user/ydotoold.service /etc/systemd/system/
-sudo sed -i 's/User=root/User=pi/' /etc/systemd/system/ydotoold.service
+sudo sed -i 's/User=root/#User=root/' /etc/systemd/system/ydotoold.service
+echo "ExecStart=/usr/bin/XAUTHORITY=/home/pi/.Xauthority ydotoold" | sudo tee -a /etc/systemd/system/ydotoold.service
 sudo systemctl daemon-reload
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
+
+# Wait and adjust ydotool socket permissions
+echo "Waiting for ydotool socket..."
+sleep 5
+sudo chmod 666 /tmp/.ydotool_socket
 
 # Enable and start touchscreen service
 echo "Enabling and starting touchscreen service..."
