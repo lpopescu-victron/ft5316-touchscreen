@@ -3,7 +3,7 @@
 # Function to install missing dependencies
 install_dependencies() {
     echo "Checking for missing dependencies..."
-    dependencies=("ydotool" "python3-smbus")
+    dependencies=("ydotool" "python3-smbus" "scdoc")
 
     for dep in "${dependencies[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
@@ -35,17 +35,39 @@ fix_uinput_permissions() {
 # Function to ensure ydotoold is running
 ensure_ydotoold_running() {
     echo "Ensuring ydotoold is running..."
+    if ! command -v ydotoold &> /dev/null; then
+        echo "ydotoold not found. Building and installing ydotoold..."
+        sudo apt update
+        sudo apt install -y git cmake build-essential scdoc
+        git clone https://github.com/ReimuNotMoe/ydotool.git
+        cd ydotool
+        mkdir build
+        cd build
+        cmake ..
+        make
+        sudo make install
+        cd ../..
+        rm -rf ydotool
+    fi
+
     if ! systemctl is-active --quiet ydotoold; then
         echo "Starting ydotoold..."
-        sudo systemctl start ydotoold
-        sudo systemctl enable ydotoold
+        sudo ydotoold --daemon
     fi
+}
+
+# Function to fix ydotool command-line options
+fix_ydotool_options() {
+    echo "Fixing ydotool command-line options..."
+    # Replace -a with --absolute for mousemove
+    sed -i 's/"ydotool", "mousemove", "-a"/"ydotool", "mousemove", "--absolute"/g' "$0"
 }
 
 # Main script logic
 install_dependencies
 fix_uinput_permissions
 ensure_ydotoold_running
+fix_ydotool_options
 
 # Run the Python script
 python3 <<EOF
@@ -122,18 +144,18 @@ while True:
                 last_event = event
 
             if event == 0 or (event == 2 and not is_down):  # Touch down or first move
-                subprocess.run(["ydotool", "mousemove", "-a", "-x", str(screen_x), "-y", str(screen_y)])
+                subprocess.run(["ydotool", "mousemove", "--absolute", "-x", str(screen_x), "-y", str(screen_y)])
                 print(f"Mouse moved to absolute {screen_x}, {screen_y}")
                 subprocess.run(["ydotool", "click", "0xC0"])
                 print("Mouse clicked (down)")
                 is_down = True
             elif event == 1:  # Touch up
                 if is_down:
-                    subprocess.run(["ydotool", "mousemove", "-a", "-x", str(screen_x), "-y", str(screen_y)])
+                    subprocess.run(["ydotool", "mousemove", "--absolute", "-x", str(screen_x), "-y", str(screen_y)])
                     print(f"Mouse moved to absolute {screen_x}, {screen_y}")
                 is_down = False
             elif event == 2:  # Touch move
-                subprocess.run(["ydotool", "mousemove", "-a", "-x", str(screen_x), "-y", str(screen_y)])
+                subprocess.run(["ydotool", "mousemove", "--absolute", "-x", str(screen_x), "-y", str(screen_y)])
                 print(f"Mouse moved to absolute {screen_x}, {screen_y}")
             else:
                 print(f"Unhandled event: {event}")
