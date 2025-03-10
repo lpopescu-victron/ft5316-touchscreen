@@ -182,6 +182,10 @@ sudo cp /usr/lib/systemd/user/ydotoold.service /etc/systemd/system/
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
 
+# Wait briefly to ensure the socket is created
+echo "Waiting for ydotool socket..."
+sleep 2
+
 # Adjust ydotool socket permissions
 echo "Adjusting ydotool socket permissions..."
 sudo chmod 666 /tmp/.ydotool_socket
