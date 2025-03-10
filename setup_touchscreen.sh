@@ -182,6 +182,10 @@ sudo cp /usr/lib/systemd/user/ydotoold.service /etc/systemd/system/
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
 
+# Adjust ydotool socket permissions
+echo "Adjusting ydotool socket permissions..."
+sudo chmod 666 /tmp/.ydotool_socket
+
 # Enable and start touchscreen service
 echo "Enabling and starting touchscreen service..."
 sudo systemctl daemon-reload
