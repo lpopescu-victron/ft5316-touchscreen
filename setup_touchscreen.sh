@@ -101,7 +101,7 @@ def detect_i2c_bus():
 
 try:
     bus_number = detect_i2c_bus()
-    bus = smbus.SMBus(bus_num)
+    bus = smbus.SMBus(bus_number)
 except RuntimeError as e:
     print(f"Error: {e}")
     sys.exit(1)
