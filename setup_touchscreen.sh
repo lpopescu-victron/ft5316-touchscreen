@@ -151,6 +151,9 @@ EEPROM_ADDR1 = 0x50
 EEPROM_ADDR2 = 0x51
 SCREEN_WIDTH = $SCREEN_WIDTH
 SCREEN_HEIGHT = $SCREEN_HEIGHT
+MAX_X = SCREEN_WIDTH - 1  # 799 or 1023 depending on resolution
+MAX_Y = SCREEN_HEIGHT - 1  # 479 or 599 depending on resolution
+SCALING_FACTOR = 2
 
 print("Script starting...")
 def detect_i2c_bus():
@@ -178,72 +181,44 @@ except RuntimeError as e:
 
 print("Starting touchscreen control. Ctrl+C or SIGTERM to stop.")
 last_event = None
-last_x, last_y = None, None
-touch_start_time = None
-touch_start_x, touch_start_y = None, None
-no_touch_time = None
+is_down = False
 
 while True:
     try:
         regs = bus.read_i2c_block_data(FT5316_ADDR, 0x00, 16)
         touch_points = regs[2]
         if touch_points > 0:
+            print(f"Touch points: {touch_points}, Registers: {regs}")
             event = (regs[3] >> 6) & 0x03
             x = ((regs[3] & 0x0F) << 8) | regs[4]
             y = ((regs[5] & 0x0F) << 8) | regs[6]
-            screen_x = min(max(x, 0), SCREEN_WIDTH - 1)
-            screen_y = min(max(y, 0), SCREEN_HEIGHT - 1)
-            print(f"Event: {event}, Raw X: {x}, Raw Y: {y} -> Screen X: {screen_x}, Screen Y: {screen_y}")
+            # Apply scaling factor of 2 without offset
+            adjusted_x = x / SCALING_FACTOR
+            adjusted_y = y / SCALING_FACTOR
+            screen_x = min(max(int(adjusted_x), 0), MAX_X)
+            screen_y = min(max(int(adjusted_y), 0), MAX_Y)
+            print(f"Event: {event}, Raw X: {x}, Raw Y: {y}, Screen X: {screen_x}, Screen Y: {screen_y}")
 
             if event != last_event:
                 print(f"Event changed: {last_event} -> {event}")
                 last_event = event
 
-            if event == 0:  # Touch down
-                subprocess.run(["ydotool", "mousemove", str(screen_x), str(screen_y)])
-                subprocess.run(["ydotool", "click", "--down", "0xC0"])
-                print("Mouse down")
-                last_x, last_y = screen_x, screen_y
-                touch_start_time = time.time()
-                touch_start_x, touch_start_y = screen_x, screen_y
+            if event == 0 or (event == 2 and not is_down):  # Touch down or first move
+                subprocess.run(["ydotool", "mousemove", "-a", "-x", str(screen_x), "-y", str(screen_y)])
+                print(f"Mouse moved to absolute {screen_x}, {screen_y}")
+                subprocess.run(["ydotool", "click", "0xC0"])
+                print("Mouse clicked (down)")
+                is_down = True
             elif event == 1:  # Touch up
-                if last_x is not None and last_y is not None:
-                    subprocess.run(["ydotool", "click", "--up", "0xC0"])
-                    print("Mouse up")
-                    touch_duration = time.time() - touch_start_time if touch_start_time else 0
-                    movement = abs(screen_x - touch_start_x) + abs(screen_y - touch_start_y)
-                    if touch_duration < 0.3 and movement < 15:
-                        print("Click detected!")
-                        subprocess.run(["ydotool", "click", "0xC0"])
-                last_x, last_y = None, None
-                touch_start_time = None
+                if is_down:
+                    subprocess.run(["ydotool", "mousemove", "-a", "-x", str(screen_x), "-y", str(screen_y)])
+                    print(f"Mouse moved to absolute {screen_x}, {screen_y}")
+                is_down = False
             elif event == 2:  # Touch move
-                if last_x is None:
-                    subprocess.run(["ydotool", "mousemove", str(screen_x), str(screen_y)])
-                    subprocess.run(["ydotool", "click", "--down", "0xC0"])
-                    print("Mouse down (move)")
-                    touch_start_time = time.time()
-                    touch_start_x, touch_start_y = screen_x, screen_y
-                subprocess.run(["ydotool", "mousemove", str(screen_x), str(screen_y)])
-                print("Mouse moved")
-                last_x, last_y = screen_x, screen_y
-                no_touch_time = None
-
-        else:
-            if last_x is not None and last_y is not None:
-                if no_touch_time is None:
-                    no_touch_time = time.time()
-                elif time.time() - no_touch_time >= 0.1:
-                    touch_duration = time.time() - touch_start_time if touch_start_time else 0
-                    movement = abs(last_x - touch_start_x) + abs(last_y - touch_start_y)
-                    if touch_duration < 0.3 and movement < 15:
-                        print("Click detected (no-touch fallback)!")
-                        subprocess.run(["ydotool", "click", "0xC0"])
-                    subprocess.run(["ydotool", "click", "--up", "0xC0"])
-                    print("Mouse up (no touch)")
-                    last_x, last_y = None, None
-                    touch_start_time = None
-                    no_touch_time = None
+                subprocess.run(["ydotool", "mousemove", "-a", "-x", str(screen_x), "-y", str(screen_y)])
+                print(f"Mouse moved to absolute {screen_x}, {screen_y}")
+            else:
+                print(f"Unhandled event: {event}")
 
         time.sleep(0.05)
     except Exception as e:
