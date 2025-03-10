@@ -177,25 +177,13 @@ TimeoutStopSec=10
 WantedBy=graphical.target
 EOF
 
-# Enable and start ydotoold service as a system service
+# Enable and start ydotoold service as pi user
 echo "Starting ydotoold service..."
 sudo cp /usr/lib/systemd/user/ydotoold.service /etc/systemd/system/
+sudo sed -i 's/User=root/User=pi/' /etc/systemd/system/ydotoold.service
 sudo systemctl daemon-reload
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
-
-# Wait and retry setting ydotool socket permissions
-echo "Waiting for ydotool socket and setting permissions..."
-for i in {1..15}; do
-    if [ -S /tmp/.ydotool_socket ]; then
-        sudo chmod 666 /tmp/.ydotool_socket
-        if [ $(stat -c %a /tmp/.ydotool_socket) -eq 666 ]; then
-            echo "Socket permissions set successfully."
-            break
-        fi
-    fi
-    sleep 1
-done
 
 # Enable and start touchscreen service
 echo "Enabling and starting touchscreen service..."
