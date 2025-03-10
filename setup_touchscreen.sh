@@ -2,7 +2,7 @@
 
 echo "Starting touchscreen setup for Raspberry Pi..."
 
-# Stop and disable any existing services
+# Stop and disable existing services
 echo "Stopping and disabling existing services..."
 sudo systemctl stop ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to stop"
 sudo systemctl disable ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to disable"
@@ -21,6 +21,7 @@ sudo pkill -f ft5316_touch.py 2>/dev/null || echo "No ft5316_touch.py processes 
 # Clean up old script files
 echo "Removing old script files..."
 sudo rm -f /home/pi/ft5316_touch.py
+sudo rm -f /home/pi/start_ydotoold.sh
 
 # Update system and install prerequisites
 echo "Updating system and installing base packages..."
@@ -159,6 +160,25 @@ EOF
 sudo chown pi:pi /home/pi/ft5316_touch.py
 chmod +x /home/pi/ft5316_touch.py
 
+# Create wrapper script for ydotoold
+echo "Creating ydotoold wrapper script..."
+cat << 'EOF' > /home/pi/start_ydotoold.sh
+#!/bin/bash
+/usr/bin/XAUTHORITY=/home/pi/.Xauthority ydotoold
+while true; do
+    if [ -S /tmp/.ydotoold_socket ]; then
+        chmod 666 /tmp/.ydotoold_socket
+        if [ $(stat -c %a /tmp/.ydotoold_socket) -eq 666 ]; then
+            break
+        fi
+    fi
+    sleep 1
+done
+wait
+EOF
+sudo chown pi:pi /home/pi/start_ydotoold.sh
+chmod +x /home/pi/start_ydotoold.sh
+
 # Create systemd service for touchscreen
 echo "Creating touchscreen service..."
 cat << 'EOF' | sudo tee /etc/systemd/system/ft5316-touchscreen.service
@@ -178,19 +198,27 @@ TimeoutStopSec=10
 WantedBy=graphical.target
 EOF
 
-# Enable and start ydotoold service as root with XAUTHORITY
-echo "Starting ydotoold service..."
-sudo cp /usr/lib/systemd/user/ydotoold.service /etc/systemd/system/
-sudo sed -i 's/User=root/#User=root/' /etc/systemd/system/ydotoold.service
-echo "ExecStart=/usr/bin/XAUTHORITY=/home/pi/.Xauthority ydotoold" | sudo tee -a /etc/systemd/system/ydotoold.service
+# Create and enable ydotoold service with wrapper
+echo "Creating ydotoold service with wrapper..."
+cat << 'EOF' | sudo tee /etc/systemd/system/ydotoold.service
+[Unit]
+Description=Starts ydotoold Daemon
+After=graphical.target
+
+[Service]
+User=pi
+ExecStart=/home/pi/start_ydotoold.sh
+Restart=always
+WorkingDirectory=/home/pi
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=graphical.target
+EOF
 sudo systemctl daemon-reload
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
-
-# Wait and adjust ydotool socket permissions
-echo "Waiting for ydotool socket..."
-sleep 5
-sudo chmod 666 /tmp/.ydotool_socket
 
 # Enable and start touchscreen service
 echo "Enabling and starting touchscreen service..."
