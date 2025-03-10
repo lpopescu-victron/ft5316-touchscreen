@@ -149,7 +149,7 @@ while True:
 
         time.sleep(0.05)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error in loop: {e}")
         time.sleep(1)
 EOF
 
