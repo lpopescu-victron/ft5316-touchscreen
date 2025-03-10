@@ -66,11 +66,12 @@ ensure_ydotoold_running() {
     fi
 
     # Ensure the socket directory exists
-    mkdir -p /tmp
-    chmod 1777 /tmp
+    SOCKET_DIR="/run/user/1000"
+    mkdir -p "$SOCKET_DIR"
+    chmod 700 "$SOCKET_DIR"
 
     # Remove any existing socket file
-    SOCKET_PATH="/tmp/.ydotool_socket"
+    SOCKET_PATH="$SOCKET_DIR/.ydotool_socket"
     if [ -S "$SOCKET_PATH" ]; then
         echo "Removing existing socket file..."
         rm -f "$SOCKET_PATH"
@@ -88,7 +89,13 @@ ensure_ydotoold_running() {
     # Verify that ydotoold is running and the socket is accessible
     if [ ! -S "$SOCKET_PATH" ]; then
         echo "Error: ydotoold socket not found. Please check if ydotoold is running."
-        exit 1
+        echo "Trying to start ydotoold again..."
+        ydotoold &
+        sleep 2
+        if [ ! -S "$SOCKET_PATH" ]; then
+            echo "Error: ydotoold still not running. Exiting."
+            exit 1
+        fi
     fi
 
     # Fix socket permissions
