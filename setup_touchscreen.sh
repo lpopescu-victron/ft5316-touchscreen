@@ -164,17 +164,19 @@ chmod +x /home/pi/ft5316_touch.py
 echo "Creating ydotoold wrapper script..."
 cat << 'EOF' > /home/pi/start_ydotoold.sh
 #!/bin/bash
-/usr/bin/XAUTHORITY=/home/pi/.Xauthority ydotoold
+export XAUTHORITY=/home/pi/.Xauthority
+ydotoold &
+YDOTOOL_PID=$!
 while true; do
-    if [ -S /tmp/.ydotoold_socket ]; then
-        chmod 666 /tmp/.ydotoold_socket
-        if [ $(stat -c %a /tmp/.ydotoold_socket) -eq 666 ]; then
+    if [ -S /tmp/.ydotool_socket ]; then
+        chmod 666 /tmp/.ydotool_socket
+        if [ $(stat -c %a /tmp/.ydotool_socket) -eq 666 ]; then
             break
         fi
     fi
     sleep 1
 done
-wait
+wait $YDOTOOL_PID
 EOF
 sudo chown pi:pi /home/pi/start_ydotoold.sh
 chmod +x /home/pi/start_ydotoold.sh
