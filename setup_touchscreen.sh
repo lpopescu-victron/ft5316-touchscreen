@@ -1,58 +1,68 @@
-#!/usr/bin/env python3
+#!/bin/bash
 
+# Function to install missing dependencies
+install_dependencies() {
+    echo "Checking for missing dependencies..."
+    dependencies=("ydotool" "python3-smbus")
+
+    for dep in "${dependencies[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            echo "Installing $dep..."
+            sudo apt update
+            sudo apt install -y "$dep"
+        fi
+    done
+}
+
+# Function to fix uinput permissions
+fix_uinput_permissions() {
+    echo "Fixing uinput permissions..."
+    if ! grep -q "uinput" /etc/modules; then
+        echo "uinput" | sudo tee -a /etc/modules
+    fi
+
+    if ! lsmod | grep -q "uinput"; then
+        sudo modprobe uinput
+    fi
+
+    if [ ! -f /etc/udev/rules.d/99-uinput.rules ]; then
+        echo 'KERNEL=="uinput", MODE="0666", GROUP="input"' | sudo tee /etc/udev/rules.d/99-uinput.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger
+    fi
+}
+
+# Function to ensure ydotoold is running
+ensure_ydotoold_running() {
+    echo "Ensuring ydotoold is running..."
+    if ! systemctl is-active --quiet ydotoold; then
+        echo "Starting ydotoold..."
+        sudo systemctl start ydotoold
+        sudo systemctl enable ydotoold
+    fi
+}
+
+# Main script logic
+install_dependencies
+fix_uinput_permissions
+ensure_ydotoold_running
+
+# Run the Python script
+python3 <<EOF
+import smbus
+import time
+import subprocess
 import os
 import sys
-import subprocess
-import time
 import signal
 
-# Function to install missing packages
-def install_dependencies():
-    print("Checking for missing dependencies...")
-    dependencies = ["ydotool", "python3-smbus"]  # Add other dependencies if needed
-
-    for dep in dependencies:
-        if dep == "ydotool":
-            # Check if ydotool is installed
-            if not os.path.exists("/usr/bin/ydotool"):
-                print(f"Installing {dep}...")
-                subprocess.run(["sudo", "apt", "update"])
-                subprocess.run(["sudo", "apt", "install", "-y", "ydotool"])
-        elif dep == "python3-smbus":
-            # Check if smbus is installed
-            try:
-                import smbus
-            except ImportError:
-                print(f"Installing {dep}...")
-                subprocess.run(["sudo", "apt", "update"])
-                subprocess.run(["sudo", "apt", "install", "-y", "python3-smbus"])
-
-# Function to check if ydotoold is running
-def check_ydotoold():
-    try:
-        subprocess.run(["systemctl", "is-active", "--quiet", "ydotoold"])
-        print("ydotoold is running.")
-    except subprocess.CalledProcessError:
-        print("ydotoold is not running. Starting ydotoold...")
-        subprocess.run(["sudo", "systemctl", "start", "ydotoold"])
-
-# Install dependencies and check ydotoold
-install_dependencies()
-check_ydotoold()
-
-# Import smbus after ensuring it is installed
-import smbus
-
-# Signal handler for graceful exit
 def signal_handler(sig, frame):
     print("Received signal to exit, shutting down...")
     sys.exit(0)
 
-# Register signal handlers
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
 
-# Constants
 FT5316_ADDR = 0x38
 EEPROM_ADDR1 = 0x50
 EEPROM_ADDR2 = 0x51
@@ -132,3 +142,4 @@ while True:
     except Exception as e:
         print(f"Error in loop: {e}")
         time.sleep(1)
+EOF
