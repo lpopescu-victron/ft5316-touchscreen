@@ -64,7 +64,7 @@ CMDLINE_FILE="/boot/firmware/cmdline.txt"
 echo "console=serial0,115200 console=tty1 root=PARTUUID=57607e47-02 rootfstype=ext4 fsck.repair=yes rootwait quiet splash plymouth.ignore-serial-consoles cfg80211.ieee80211_regdom=GB video=HDMI-A-1:800x480@60 video=HDMI-A-2:800x480@60" | sudo tee "$CMDLINE_FILE"
 
 # Update config.txt with provided settings
-sudo bash -c 'cat << "EOF" | tee /boot/firmware/config.txt
+sudo bash -c 'cat << "EOF" > /boot/firmware/config.txt
 # For more options and information see
 # http://rptl.io/configtxt
 # Some settings may impact device functionality. See link above for details
@@ -233,7 +233,7 @@ chmod +x /home/pi/ft5316_touch.py
 
 # Create systemd service for touchscreen
 echo "Creating touchscreen service..."
-sudo bash -c 'cat << "EOF" | tee /etc/systemd/system/ft5316-touchscreen.service
+sudo bash -c 'cat << "EOF" > /etc/systemd/system/ft5316-touchscreen.service
 [Unit]
 Description=FT5316 Touchscreen Driver
 After=graphical.target multi-user.target
