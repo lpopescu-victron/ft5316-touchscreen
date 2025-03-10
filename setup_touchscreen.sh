@@ -59,8 +59,8 @@ ensure_ydotoold_running() {
     fi
 
     # Ensure the socket directory exists
-    mkdir -p /run/user/1000
-    chmod 700 /run/user/1000
+    mkdir -p /tmp
+    chmod 1777 /tmp
 
     # Set DISPLAY and allow local connections to the X server
     export DISPLAY=:0
@@ -70,6 +70,13 @@ ensure_ydotoold_running() {
     if ! pgrep -x "ydotoold" > /dev/null; then
         echo "Starting ydotoold..."
         ydotoold &
+        sleep 2  # Give ydotoold time to start
+    fi
+
+    # Verify that ydotoold is running and the socket is accessible
+    if [ ! -S /tmp/.ydotool_socket ]; then
+        echo "Error: ydotoold socket not found. Please check if ydotoold is running."
+        exit 1
     fi
 }
 
