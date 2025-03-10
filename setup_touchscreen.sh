@@ -40,6 +40,13 @@ fix_uinput_permissions() {
     fi
 }
 
+# Function to stop any running ydotoold processes
+stop_ydotoold() {
+    echo "Stopping any running ydotoold processes..."
+    pkill -x ydotoold || true
+    sleep 1  # Give processes time to stop
+}
+
 # Function to ensure ydotoold is running
 ensure_ydotoold_running() {
     echo "Ensuring ydotoold is running..."
@@ -62,32 +69,31 @@ ensure_ydotoold_running() {
     mkdir -p /tmp
     chmod 1777 /tmp
 
+    # Remove any existing socket file
+    SOCKET_PATH="/tmp/.ydotool_socket"
+    if [ -S "$SOCKET_PATH" ]; then
+        echo "Removing existing socket file..."
+        rm -f "$SOCKET_PATH"
+    fi
+
     # Set DISPLAY and allow local connections to the X server
     export DISPLAY=:0
     xhost +local:
 
     # Start ydotoold in the background
-    if ! pgrep -x "ydotoold" > /dev/null; then
-        echo "Starting ydotoold..."
-        ydotoold &
-        sleep 2  # Give ydotoold time to start
-    fi
+    echo "Starting ydotoold..."
+    ydotoold &
+    sleep 2  # Give ydotoold time to start
 
     # Verify that ydotoold is running and the socket is accessible
-    if [ ! -S /tmp/.ydotool_socket ]; then
+    if [ ! -S "$SOCKET_PATH" ]; then
         echo "Error: ydotoold socket not found. Please check if ydotoold is running."
-        echo "Trying to start ydotoold again..."
-        ydotoold &
-        sleep 2
-        if [ ! -S /tmp/.ydotool_socket ]; then
-            echo "Error: ydotoold still not running. Exiting."
-            exit 1
-        fi
+        exit 1
     fi
 
     # Fix socket permissions
     echo "Fixing socket permissions..."
-    sudo chmod 777 /tmp/.ydotool_socket
+    chmod 777 "$SOCKET_PATH"
 }
 
 # Function to fix ydotool command-line options
@@ -101,6 +107,7 @@ fix_ydotool_options() {
 check_root
 install_dependencies
 fix_uinput_permissions
+stop_ydotoold
 ensure_ydotoold_running
 fix_ydotool_options
 
