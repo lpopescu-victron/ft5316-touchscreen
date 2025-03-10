@@ -101,7 +101,7 @@ def detect_i2c_bus():
 
 try:
     bus_number = detect_i2c_bus()
-    bus = smbus.SMBus(bus_number)
+    bus = smbus.SMBus(bus_num)
 except RuntimeError as e:
     print(f"Error: {e}")
     sys.exit(1)
@@ -149,7 +149,7 @@ while True:
 
         time.sleep(0.05)
     except Exception as e:
-        print(f"Error in loop: {e}")
+        print(f"Error: {e}")
         time.sleep(1)
 EOF
 
@@ -162,7 +162,7 @@ echo "Creating touchscreen service..."
 cat << 'EOF' | sudo tee /etc/systemd/system/ft5316-touchscreen.service
 [Unit]
 Description=FT5316 Touchscreen Driver
-After=graphical.target multi-user.target
+After=graphical.target multi-user.target ydotoold.service
 
 [Service]
 User=pi
@@ -176,10 +176,11 @@ TimeoutStopSec=10
 WantedBy=graphical.target
 EOF
 
-# Enable and start ydotoold service
+# Enable and start ydotoold service as a system service
 echo "Starting ydotoold service..."
-systemctl --user enable ydotoold.service
-systemctl --user start ydotoold.service
+sudo cp /usr/lib/systemd/user/ydotoold.service /etc/systemd/system/
+sudo systemctl enable ydotoold.service
+sudo systemctl start ydotoold.service
 
 # Enable and start touchscreen service
 echo "Enabling and starting touchscreen service..."
@@ -189,7 +190,8 @@ sudo systemctl start ft5316-touchscreen.service
 
 # Clean up the downloaded script file
 echo "Cleaning up downloaded script file..."
-rm -f "$0"
+[ -f "$0" ] && rm -f "$0" || echo "No downloadable script to clean up."
+
 echo "Setup complete! Rebooting in 5 seconds to apply changes..."
 sleep 5
 sudo reboot
