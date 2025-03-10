@@ -51,14 +51,16 @@ ensure_ydotoold_running() {
     fi
 
     # Ensure the socket directory exists
-    mkdir -p /run/user/1000
-    chmod 700 /run/user/1000
+    mkdir -p /tmp
+    chmod 1777 /tmp
+
+    # Set DISPLAY and allow local connections to the X server
+    export DISPLAY=:0
+    xhost +local:
 
     # Start ydotoold in the background
     if ! pgrep -x "ydotoold" > /dev/null; then
         echo "Starting ydotoold..."
-        export DISPLAY=:0
-        xhost +local:
         ydotoold &
     fi
 }
