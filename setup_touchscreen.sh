@@ -10,6 +10,7 @@ sudo systemctl disable ft5316-touchscreen.service 2>/dev/null || echo "No ft5316
 # Remove old service files
 echo "Removing old service files..."
 sudo rm -f /etc/systemd/system/ft5316-touchscreen.service
+sudo rm -f /etc/systemd/system/ydotoold.service
 sudo systemctl daemon-reload
 
 # Kill any running instances
@@ -176,25 +177,13 @@ TimeoutStopSec=10
 WantedBy=graphical.target
 EOF
 
-# Enable and start ydotoold service as a system service
+# Enable and start ydotoold service as a system service with adjusted permissions
 echo "Starting ydotoold service..."
 sudo cp /usr/lib/systemd/user/ydotoold.service /etc/systemd/system/
+echo "Environment=YD_SERVER_SOCK_MODE=0666" | sudo tee -a /etc/systemd/system/ydotoold.service
+sudo systemctl daemon-reload
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
-
-# Wait until ydotool socket exists
-echo "Waiting for ydotool socket..."
-for i in {1..10}; do
-    if [ -S /tmp/.ydotool_socket ]; then
-        echo "Socket found."
-        break
-    fi
-    sleep 1
-done
-
-# Adjust ydotool socket permissions
-echo "Adjusting ydotool socket permissions..."
-sudo chmod 666 /tmp/.ydotool_socket
 
 # Enable and start touchscreen service
 echo "Enabling and starting touchscreen service..."
