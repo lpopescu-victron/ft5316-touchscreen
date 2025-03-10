@@ -1,125 +1,64 @@
 #!/bin/bash
 
-# Function to check if running as root
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        echo "This script requires root privileges. Restarting with sudo..."
-        exec sudo "$0" "$@"
-    fi
-}
+echo "Starting touchscreen setup for Raspberry Pi..."
 
-# Function to install missing dependencies
-install_dependencies() {
-    echo "Checking for missing dependencies..."
-    dependencies=("ydotool" "python3-smbus" "scdoc")
+# Stop and disable any existing services
+echo "Stopping and disabling existing services..."
+sudo systemctl stop ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to stop"
+sudo systemctl disable ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to disable"
 
-    for dep in "${dependencies[@]}"; do
-        if ! command -v "$dep" &> /dev/null; then
-            echo "Installing $dep..."
-            apt update
-            apt install -y "$dep"
-        fi
-    done
-}
+# Remove old service files
+echo "Removing old service files..."
+sudo rm -f /etc/systemd/system/ft5316-touchscreen.service
+sudo systemctl daemon-reload
 
-# Function to fix uinput permissions
-fix_uinput_permissions() {
-    echo "Fixing uinput permissions..."
-    if ! grep -q "uinput" /etc/modules; then
-        echo "uinput" | tee -a /etc/modules
-    fi
+# Kill any running instances
+echo "Terminating any running instances..."
+sudo pkill -f ft5316_touch.py 2>/dev/null || echo "No ft5316_touch.py processes found"
 
-    if ! lsmod | grep -q "uinput"; then
-        modprobe uinput
-    fi
+# Clean up old script files
+echo "Removing old script files..."
+sudo rm -f /home/pi/ft5316_touch.py
 
-    if [ ! -f /etc/udev/rules.d/99-uinput.rules ]; then
-        echo 'KERNEL=="uinput", MODE="0666", GROUP="input"' | tee /etc/udev/rules.d/99-uinput.rules
-        udevadm control --reload-rules
-        udevadm trigger
-    fi
-}
+# Update system and install prerequisites
+echo "Updating system and installing base packages..."
+sudo apt update
+sudo apt install -y python3-pip python3-smbus i2c-tools git cmake libudev-dev scdoc
 
-# Function to stop any running ydotoold processes
-stop_ydotoold() {
-    echo "Stopping any running ydotoold processes..."
-    pkill -x ydotoold || true
-    sleep 1  # Give processes time to stop
-}
+# Install ydotool for Wayland cursor control
+echo "Installing ydotool..."
+cd /home/pi
+git clone https://github.com/ReimuNotMoe/ydotool
+cd ydotool
+mkdir build && cd build
+cmake ..
+make
+sudo make install
+cd /home/pi
+rm -rf ydotool
 
-# Function to ensure ydotoold is running
-ensure_ydotoold_running() {
-    echo "Ensuring ydotoold is running..."
-    if ! command -v ydotoold &> /dev/null; then
-        echo "ydotoold not found. Building and installing ydotoold..."
-        apt update
-        apt install -y git cmake build-essential scdoc
-        git clone https://github.com/ReimuNotMoe/ydotool.git
-        cd ydotool
-        mkdir build
-        cd build
-        cmake ..
-        make
-        make install
-        cd ../..
-        rm -rf ydotool
-    fi
+# Set up uinput permissions for pi user
+echo "Configuring uinput permissions..."
+sudo usermod -aG input pi
+sudo bash -c 'echo "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", MODE=\"0660\", GROUP=\"input\"" > /etc/udev/rules.d/99-uinput.rules'
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+sudo modprobe -r uinput || echo "Module uinput is in use, continuing..."
+sudo modprobe uinput
 
-    # Ensure the socket directory exists
-    SOCKET_DIR="/run/user/1000"
-    mkdir -p "$SOCKET_DIR"
-    chmod 700 "$SOCKET_DIR"
+# Enable I2C in config.txt
+echo "Checking and enabling I2C..."
+CONFIG_FILE="/boot/firmware/config.txt"
+if ! grep -q "^dtparam=i2c_arm=on" "$CONFIG_FILE"; then
+    echo "Enabling I2C in $CONFIG_FILE..."
+    echo "dtparam=i2c_arm=on" | sudo tee -a "$CONFIG_FILE"
+else
+    echo "I2C is already enabled in $CONFIG_FILE."
+end
 
-    # Remove any existing socket file
-    SOCKET_PATH="$SOCKET_DIR/.ydotool_socket"
-    if [ -S "$SOCKET_PATH" ]; then
-        echo "Removing existing socket file..."
-        rm -f "$SOCKET_PATH"
-    fi
-
-    # Set DISPLAY and allow local connections to the X server
-    export DISPLAY=:0
-    xhost +local:
-
-    # Start ydotoold in the background
-    echo "Starting ydotoold..."
-    ydotoold &
-    sleep 2  # Give ydotoold time to start
-
-    # Verify that ydotoold is running and the socket is accessible
-    if [ ! -S "$SOCKET_PATH" ]; then
-        echo "Error: ydotoold socket not found. Please check if ydotoold is running."
-        echo "Trying to start ydotoold again..."
-        ydotoold &
-        sleep 2
-        if [ ! -S "$SOCKET_PATH" ]; then
-            echo "Error: ydotoold still not running. Exiting."
-            exit 1
-        fi
-    fi
-
-    # Fix socket permissions
-    echo "Fixing socket permissions..."
-    chmod 777 "$SOCKET_PATH"
-}
-
-# Function to fix ydotool command-line options
-fix_ydotool_options() {
-    echo "Fixing ydotool command-line options..."
-    # Replace -a with --absolute for mousemove
-    sed -i 's/"ydotool", "mousemove", "-a"/"ydotool", "mousemove", "--absolute"/g' "$0"
-}
-
-# Main script logic
-check_root
-install_dependencies
-fix_uinput_permissions
-stop_ydotoold
-ensure_ydotoold_running
-fix_ydotool_options
-
-# Run the Python script
-python3 <<EOF
+# Create the touchscreen script with ydotool
+echo "Setting up touchscreen script..."
+cat << 'EOF' > /home/pi/ft5316_touch.py
 import smbus
 import time
 import subprocess
@@ -144,7 +83,6 @@ MAX_Y = SCREEN_HEIGHT - 1  # 479
 SCALING_FACTOR = 2
 
 print("Script starting...")
-
 def detect_i2c_bus():
     print("Detecting I2C bus...")
     for bus_num in range(0, 100):
@@ -193,18 +131,18 @@ while True:
                 last_event = event
 
             if event == 0 or (event == 2 and not is_down):  # Touch down or first move
-                subprocess.run(["ydotool", "mousemove", "--absolute", "-x", str(screen_x), "-y", str(screen_y)])
+                subprocess.run(["ydotool", "mousemove", "-a", "-x", str(screen_x), "-y", str(screen_y)])
                 print(f"Mouse moved to absolute {screen_x}, {screen_y}")
                 subprocess.run(["ydotool", "click", "0xC0"])
                 print("Mouse clicked (down)")
                 is_down = True
             elif event == 1:  # Touch up
                 if is_down:
-                    subprocess.run(["ydotool", "mousemove", "--absolute", "-x", str(screen_x), "-y", str(screen_y)])
+                    subprocess.run(["ydotool", "mousemove", "-a", "-x", str(screen_x), "-y", str(screen_y)])
                     print(f"Mouse moved to absolute {screen_x}, {screen_y}")
                 is_down = False
             elif event == 2:  # Touch move
-                subprocess.run(["ydotool", "mousemove", "--absolute", "-x", str(screen_x), "-y", str(screen_y)])
+                subprocess.run(["ydotool", "mousemove", "-a", "-x", str(screen_x), "-y", str(screen_y)])
                 print(f"Mouse moved to absolute {screen_x}, {screen_y}")
             else:
                 print(f"Unhandled event: {event}")
@@ -214,3 +152,44 @@ while True:
         print(f"Error in loop: {e}")
         time.sleep(1)
 EOF
+
+# Set ownership and make executable
+sudo chown pi:pi /home/pi/ft5316_touch.py
+chmod +x /home/pi/ft5316_touch.py
+
+# Create systemd service for touchscreen
+echo "Creating touchscreen service..."
+cat << 'EOF' | sudo tee /etc/systemd/system/ft5316-touchscreen.service
+[Unit]
+Description=FT5316 Touchscreen Driver
+After=graphical.target multi-user.target
+
+[Service]
+User=pi
+ExecStart=/usr/bin/python3 /home/pi/ft5316_touch.py
+Restart=always
+WorkingDirectory=/home/pi
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=graphical.target
+EOF
+
+# Enable and start ydotoold service
+echo "Starting ydotoold service..."
+systemctl --user enable ydotoold.service
+systemctl --user start ydotoold.service
+
+# Enable and start touchscreen service
+echo "Enabling and starting touchscreen service..."
+sudo systemctl daemon-reload
+sudo systemctl enable ft5316-touchscreen.service
+sudo systemctl start ft5316-touchscreen.service
+
+# Clean up the downloaded script file
+echo "Cleaning up downloaded script file..."
+rm -f "$0"
+echo "Setup complete! Rebooting in 5 seconds to apply changes..."
+sleep 5
+sudo reboot
