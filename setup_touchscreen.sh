@@ -54,7 +54,7 @@ if ! grep -q "^dtparam=i2c_arm=on" "$CONFIG_FILE"; then
     echo "dtparam=i2c_arm=on" | sudo tee -a "$CONFIG_FILE"
 else
     echo "I2C is already enabled in $CONFIG_FILE."
-end
+fi
 
 # Create the touchscreen script with ydotool
 echo "Setting up touchscreen script..."
