@@ -50,9 +50,16 @@ ensure_ydotoold_running() {
         rm -rf ydotool
     fi
 
-    if ! systemctl is-active --quiet ydotoold; then
+    # Ensure the socket directory exists
+    mkdir -p /run/user/1000
+    chmod 700 /run/user/1000
+
+    # Start ydotoold in the background
+    if ! pgrep -x "ydotoold" > /dev/null; then
         echo "Starting ydotoold..."
-        sudo ydotoold --daemon
+        export DISPLAY=:0
+        xhost +local:
+        ydotoold &
     fi
 }
 
