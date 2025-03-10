@@ -177,13 +177,20 @@ TimeoutStopSec=10
 WantedBy=graphical.target
 EOF
 
-# Enable and start ydotoold service as a system service with adjusted permissions
+# Enable and start ydotoold service as a system service
 echo "Starting ydotoold service..."
 sudo cp /usr/lib/systemd/user/ydotoold.service /etc/systemd/system/
-echo "Environment=YD_SERVER_SOCK_MODE=0666" | sudo tee -a /etc/systemd/system/ydotoold.service
 sudo systemctl daemon-reload
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
+
+# Wait longer to ensure the socket is created
+echo "Waiting for ydotool socket..."
+sleep 5
+
+# Adjust ydotool socket permissions
+echo "Adjusting ydotool socket permissions..."
+sudo chmod 666 /tmp/.ydotool_socket
 
 # Enable and start touchscreen service
 echo "Enabling and starting touchscreen service..."
