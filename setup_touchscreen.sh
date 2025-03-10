@@ -184,13 +184,18 @@ sudo systemctl daemon-reload
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
 
-# Wait longer to ensure the socket is created
-echo "Waiting for ydotool socket..."
-sleep 5
-
-# Adjust ydotool socket permissions
-echo "Adjusting ydotool socket permissions..."
-sudo chmod 666 /tmp/.ydotool_socket
+# Wait and retry setting ydotool socket permissions
+echo "Waiting for ydotool socket and setting permissions..."
+for i in {1..15}; do
+    if [ -S /tmp/.ydotool_socket ]; then
+        sudo chmod 666 /tmp/.ydotool_socket
+        if [ $(stat -c %a /tmp/.ydotool_socket) -eq 666 ]; then
+            echo "Socket permissions set successfully."
+            break
+        fi
+    fi
+    sleep 1
+done
 
 # Enable and start touchscreen service
 echo "Enabling and starting touchscreen service..."
