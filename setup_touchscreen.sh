@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Ensure the script is run as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run this script as root."
+    exit 1
+fi
+
 # Function to install missing dependencies
 install_dependencies() {
     echo "Checking for missing dependencies..."
@@ -8,8 +14,8 @@ install_dependencies() {
     for dep in "${dependencies[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
             echo "Installing $dep..."
-            sudo apt update
-            sudo apt install -y "$dep"
+            apt update
+            apt install -y "$dep"
         fi
     done
 }
@@ -18,17 +24,17 @@ install_dependencies() {
 fix_uinput_permissions() {
     echo "Fixing uinput permissions..."
     if ! grep -q "uinput" /etc/modules; then
-        echo "uinput" | sudo tee -a /etc/modules
+        echo "uinput" | tee -a /etc/modules
     fi
 
     if ! lsmod | grep -q "uinput"; then
-        sudo modprobe uinput
+        modprobe uinput
     fi
 
     if [ ! -f /etc/udev/rules.d/99-uinput.rules ]; then
-        echo 'KERNEL=="uinput", MODE="0666", GROUP="input"' | sudo tee /etc/udev/rules.d/99-uinput.rules
-        sudo udevadm control --reload-rules
-        sudo udevadm trigger
+        echo 'KERNEL=="uinput", MODE="0666", GROUP="input"' | tee /etc/udev/rules.d/99-uinput.rules
+        udevadm control --reload-rules
+        udevadm trigger
     fi
 }
 
@@ -37,22 +43,22 @@ ensure_ydotoold_running() {
     echo "Ensuring ydotoold is running..."
     if ! command -v ydotoold &> /dev/null; then
         echo "ydotoold not found. Building and installing ydotoold..."
-        sudo apt update
-        sudo apt install -y git cmake build-essential scdoc
+        apt update
+        apt install -y git cmake build-essential scdoc
         git clone https://github.com/ReimuNotMoe/ydotool.git
         cd ydotool
         mkdir build
         cd build
         cmake ..
         make
-        sudo make install
+        make install
         cd ../..
         rm -rf ydotool
     fi
 
     # Ensure the socket directory exists
-    mkdir -p /tmp
-    chmod 1777 /tmp
+    mkdir -p /run/user/1000
+    chmod 700 /run/user/1000
 
     # Set DISPLAY and allow local connections to the X server
     export DISPLAY=:0
