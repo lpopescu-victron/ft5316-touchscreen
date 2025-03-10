@@ -1,10 +1,12 @@
 #!/bin/bash
 
-# Ensure the script is run as root
-if [ "$EUID" -ne 0 ]; then
-    echo "Please run this script as root."
-    exit 1
-fi
+# Function to check if running as root
+check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "This script requires root privileges. Restarting with sudo..."
+        exec sudo "$0" "$@"
+    fi
+}
 
 # Function to install missing dependencies
 install_dependencies() {
@@ -79,6 +81,7 @@ fix_ydotool_options() {
 }
 
 # Main script logic
+check_root
 install_dependencies
 fix_uinput_permissions
 ensure_ydotoold_running
