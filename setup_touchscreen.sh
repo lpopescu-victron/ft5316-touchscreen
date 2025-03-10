@@ -1,19 +1,48 @@
 #!/usr/bin/env python3
 
-import smbus
-import time
-import subprocess
 import os
 import sys
+import subprocess
+import time
 import signal
 
+# Function to install missing packages
+def install_dependencies():
+    print("Checking for missing dependencies...")
+    dependencies = ["ydotool", "python3-smbus"]  # Add other dependencies if needed
+
+    for dep in dependencies:
+        if dep == "ydotool":
+            # Check if ydotool is installed
+            if not os.path.exists("/usr/bin/ydotool"):
+                print(f"Installing {dep}...")
+                subprocess.run(["sudo", "apt", "update"])
+                subprocess.run(["sudo", "apt", "install", "-y", "ydotool"])
+        elif dep == "python3-smbus":
+            # Check if smbus is installed
+            try:
+                import smbus
+            except ImportError:
+                print(f"Installing {dep}...")
+                subprocess.run(["sudo", "apt", "update"])
+                subprocess.run(["sudo", "apt", "install", "-y", "python3-smbus"])
+
+# Install dependencies before proceeding
+install_dependencies()
+
+# Import smbus after ensuring it is installed
+import smbus
+
+# Signal handler for graceful exit
 def signal_handler(sig, frame):
     print("Received signal to exit, shutting down...")
     sys.exit(0)
 
+# Register signal handlers
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
 
+# Constants
 FT5316_ADDR = 0x38
 EEPROM_ADDR1 = 0x50
 EEPROM_ADDR2 = 0x51
@@ -24,6 +53,7 @@ MAX_Y = SCREEN_HEIGHT - 1  # 479
 SCALING_FACTOR = 2
 
 print("Script starting...")
+
 def detect_i2c_bus():
     print("Detecting I2C bus...")
     for bus_num in range(0, 100):
