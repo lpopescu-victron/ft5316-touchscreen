@@ -51,7 +51,7 @@ echo "Checking and enabling I2C..."
 CONFIG_FILE="/boot/firmware/config.txt"
 if ! grep -q "^dtparam=i2c_arm=on" "$CONFIG_FILE"; then
     echo "Enabling I2C in $CONFIG_FILE..."
-    sudo bash -c "echo 'dtparam=i2c_arm=on' >> $CONFIG_FILE"
+    echo "dtparam=i2c_arm=on" | sudo tee -a "$CONFIG_FILE"
 else
     echo "I2C is already enabled in $CONFIG_FILE."
 fi
@@ -59,13 +59,12 @@ fi
 # Set resolution using cmdline.txt and config.txt as provided
 echo "Setting resolution to 800x480 using cmdline.txt and config.txt..."
 CMDLINE_FILE="/boot/firmware/cmdline.txt"
-CONFIG_FILE="/boot/firmware/config.txt"
 
 # Update cmdline.txt
-sudo bash -c "echo 'console=serial0,115200 console=tty1 root=PARTUUID=57607e47-02 rootfstype=ext4 fsck.repair=yes rootwait quiet splash plymouth.ignore-serial-consoles cfg80211.ieee80211_regdom=GB video=HDMI-A-1:800x480@60 video=HDMI-A-2:800x480@60' > $CMDLINE_FILE"
+echo "console=serial0,115200 console=tty1 root=PARTUUID=57607e47-02 rootfstype=ext4 fsck.repair=yes rootwait quiet splash plymouth.ignore-serial-consoles cfg80211.ieee80211_regdom=GB video=HDMI-A-1:800x480@60 video=HDMI-A-2:800x480@60" | sudo tee "$CMDLINE_FILE"
 
 # Update config.txt with provided settings
-sudo bash -c 'cat << EOF > $CONFIG_FILE
+sudo bash -c 'cat << "EOF" | tee /boot/firmware/config.txt
 # For more options and information see
 # http://rptl.io/configtxt
 # Some settings may impact device functionality. See link above for details
@@ -126,6 +125,7 @@ disable_overscan=1
 hdmi_drive=2
 EOF'
 
+# Set screen width and height
 SCREEN_WIDTH=800
 SCREEN_HEIGHT=480
 
@@ -233,7 +233,7 @@ chmod +x /home/pi/ft5316_touch.py
 
 # Create systemd service for touchscreen
 echo "Creating touchscreen service..."
-sudo bash -c 'cat << "EOF" > /etc/systemd/system/ft5316-touchscreen.service
+sudo bash -c 'cat << "EOF" | tee /etc/systemd/system/ft5316-touchscreen.service
 [Unit]
 Description=FT5316 Touchscreen Driver
 After=graphical.target multi-user.target
