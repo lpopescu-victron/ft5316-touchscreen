@@ -76,8 +76,18 @@ ensure_ydotoold_running() {
     # Verify that ydotoold is running and the socket is accessible
     if [ ! -S /tmp/.ydotool_socket ]; then
         echo "Error: ydotoold socket not found. Please check if ydotoold is running."
-        exit 1
+        echo "Trying to start ydotoold again..."
+        ydotoold &
+        sleep 2
+        if [ ! -S /tmp/.ydotool_socket ]; then
+            echo "Error: ydotoold still not running. Exiting."
+            exit 1
+        fi
     fi
+
+    # Fix socket permissions
+    echo "Fixing socket permissions..."
+    sudo chmod 777 /tmp/.ydotool_socket
 }
 
 # Function to fix ydotool command-line options
