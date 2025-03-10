@@ -27,8 +27,18 @@ def install_dependencies():
                 subprocess.run(["sudo", "apt", "update"])
                 subprocess.run(["sudo", "apt", "install", "-y", "python3-smbus"])
 
-# Install dependencies before proceeding
+# Function to check if ydotoold is running
+def check_ydotoold():
+    try:
+        subprocess.run(["systemctl", "is-active", "--quiet", "ydotoold"])
+        print("ydotoold is running.")
+    except subprocess.CalledProcessError:
+        print("ydotoold is not running. Starting ydotoold...")
+        subprocess.run(["sudo", "systemctl", "start", "ydotoold"])
+
+# Install dependencies and check ydotoold
 install_dependencies()
+check_ydotoold()
 
 # Import smbus after ensuring it is installed
 import smbus
