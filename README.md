@@ -2,6 +2,11 @@
 
 This script sets up the Victron Energy Touch GX 7 Touchscreen on a Raspberry Pi, including necessary dependencies and services.
 
+I've updated the debugging section to include scanning all I2C buses. Here's the corrected `README.md`:
+
+---
+
+
 ## Installation
 
 Run the following command to download and install the script:
@@ -59,6 +64,18 @@ If it's not running, restart it:
 sudo systemctl restart ydotoold.service
 ```
 
+### Fix `ydotoold` permission issue
+
+If `ydotoold` fails due to `uinput` permission issues, manually apply the `udev` rule and restart `ydotoold`:
+
+```bash
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+sudo modprobe -r uinput || echo "Module uinput is in use, continuing..."
+sudo modprobe uinput
+sudo systemctl restart ydotoold.service
+```
+
 ### Manually start the touchscreen script
 
 To manually run the touchscreen script for debugging:
@@ -95,3 +112,4 @@ sudo systemctl enable ydotoold.service
 ---
 
 This should cover installation, debugging, and service management! 🚀
+
