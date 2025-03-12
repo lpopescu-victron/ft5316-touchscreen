@@ -46,8 +46,23 @@ sudo usermod -aG input pi
 sudo bash -c 'echo "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", MODE=\"0660\", GROUP=\"input\"" > /etc/udev/rules.d/99-uinput.rules'
 sudo udevadm control --reload-rules
 sudo udevadm trigger
-sudo chmod 660 /dev/uinput
-sudo chgrp input /dev/uinput
+# Fallback: manually set permissions with retry
+echo "Checking and setting uinput permissions..."
+for i in {1..5}; do
+    if [ -e /dev/uinput ]; then
+        sudo chmod 660 /dev/uinput
+        sudo chgrp input /dev/uinput
+        if [ $(stat -c %a /dev/uinput) -eq 660 ] && [ $(stat -c %G /dev/uinput) = "input" ]; then
+            echo "uinput permissions set to 660 with group input."
+            break
+        else
+            echo "uinput permissions not set correctly, retrying... (attempt $i/5)"
+        fi
+    else
+        echo "uinput device not found, retrying... (attempt $i/5)"
+    fi
+    sleep 1
+done
 
 # Enable I2C in config.txt
 echo "Checking and enabling I2C..."
@@ -58,6 +73,15 @@ if ! grep -q "^dtparam=i2c_arm=on" "$CONFIG_FILE"; then
 else
     echo "I2C is already enabled in $CONFIG_FILE."
 fi
+
+# Check I2C devices
+echo "Detecting I2C devices..."
+for bus in /dev/i2c-*; do
+    if [ -e "$bus" ]; then
+        i2c_bus=$(basename "$bus")
+        i2cdetect -y "$i2c_bus" | grep -E "38|50|51" && echo "FT5316 (0x38), EEPROM (0x50, 0x51) detected on bus $i2c_bus" || echo "No FT5316 or EEPROM detected on bus $i2c_bus"
+    fi
+done
 
 # Create the touchscreen script with ydotool
 echo "Setting up touchscreen script..."
@@ -157,8 +181,14 @@ while True:
 EOF
 
 # Set ownership and make executable
-sudo chown pi:pi /home/pi/ft5316_touch.py
-chmod +x /home/pi/ft5316_touch.py
+echo "Checking file rights for ft5316_touch.py..."
+if [ -f /home/pi/ft5316_touch.py ]; then
+    sudo chown pi:pi /home/pi/ft5316_touch.py
+    chmod +x /home/pi/ft5316_touch.py
+    echo "ft5316_touch.py rights set: $(ls -l /home/pi/ft5316_touch.py)"
+else
+    echo "Error: ft5316_touch.py not found!"
+fi
 
 # Create wrapper script for ydotoold
 echo "Creating ydotoold wrapper script..."
@@ -178,8 +208,14 @@ while true; do
 done
 wait $YDOTOOL_PID
 EOF
-sudo chown pi:pi /home/pi/start_ydotoold.sh
-chmod +x /home/pi/start_ydotoold.sh
+echo "Checking file rights for start_ydotoold.sh..."
+if [ -f /home/pi/start_ydotoold.sh ]; then
+    sudo chown pi:pi /home/pi/start_ydotoold.sh
+    chmod +x /home/pi/start_ydotoold.sh
+    echo "start_ydotoold.sh rights set: $(ls -l /home/pi/start_ydotoold.sh)"
+else
+    echo "Error: start_ydotoold.sh not found!"
+fi
 
 # Create systemd service for touchscreen
 echo "Creating touchscreen service..."
@@ -219,14 +255,47 @@ TimeoutStopSec=10
 WantedBy=graphical.target
 EOF
 sudo systemctl daemon-reload
+echo "Checking ydotoold service file..."
+if [ -f /etc/systemd/system/ydotoold.service ]; then
+    echo "ydotoold.service exists: $(ls -l /etc/systemd/system/ydotoold.service)"
+else
+    echo "Error: ydotoold.service not found!"
+fi
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
 
 # Enable and start touchscreen service
-echo "Enabling and starting touchscreen service..."
+echo "Creating ft5316-touchscreen service..."
+cat << 'EOF' | sudo tee /etc/systemd/system/ft5316-touchscreen.service
+[Unit]
+Description=FT5316 Touchscreen Driver
+After=graphical.target multi-user.target ydotoold.service
+
+[Service]
+User=pi
+ExecStart=/usr/bin/python3 /home/pi/ft5316_touch.py
+Restart=always
+WorkingDirectory=/home/pi
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=graphical.target
+EOF
+echo "Checking ft5316-touchscreen service file..."
+if [ -f /etc/systemd/system/ft5316-touchscreen.service ]; then
+    echo "ft5316-touchscreen.service exists: $(ls -l /etc/systemd/system/ft5316-touchscreen.service)"
+else
+    echo "Error: ft5316-touchscreen.service not found!"
+fi
 sudo systemctl daemon-reload
 sudo systemctl enable ft5316-touchscreen.service
 sudo systemctl start ft5316-touchscreen.service
+
+# Check service status before reboot
+echo "Checking service status before reboot..."
+systemctl status ydotoold.service
+systemctl status ft5316-touchscreen.service
 
 # Clean up the downloaded script file
 echo "Cleaning up downloaded script file..."
