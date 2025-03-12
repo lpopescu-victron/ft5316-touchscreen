@@ -2,7 +2,6 @@
 
 This script sets up the Victron Energy Touch GX 7 Touchscreen on a Raspberry Pi, including necessary dependencies and services.
 
-I've updated the debugging section to include scanning all I2C buses. Here's the corrected `README.md`:
 
 ---
 
