@@ -7,6 +7,9 @@ echo "Stopping and disabling existing services..."
 sudo systemctl stop ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to stop"
 sudo systemctl disable ft5316-touchscreen.service 2>/dev/null || echo "No ft5316-touchscreen.service to disable"
 
+sudo systemctl stop ydotoold.service 2>/dev/null || echo "No ydotoold.service to stop"
+sudo systemctl disable ydotoold.service 2>/dev/null || echo "No ydotoold.service to disable"
+
 # Remove old service files
 echo "Removing old service files..."
 sudo rm -f /etc/systemd/system/ft5316-touchscreen.service
@@ -25,20 +28,33 @@ sudo rm -f /home/pi/start_ydotoold.sh
 
 # Update system and install prerequisites
 echo "Updating system and installing base packages..."
-sudo apt update
-sudo apt install -y python3-pip python3-smbus i2c-tools git cmake libudev-dev scdoc
+sudo apt update && sudo apt install -y python3-pip python3-smbus i2c-tools git cmake libudev-dev scdoc
 
 # Install ydotool for Wayland cursor control
 echo "Installing ydotool..."
 cd /home/pi
-git clone https://github.com/ReimuNotMoe/ydotool
+git clone https://github.com/ReimuNotMoe/ydotool || (cd ydotool && git pull)
 cd ydotool
-mkdir build && cd build
+mkdir -p build && cd build
 cmake ..
-make
+make -j$(nproc)
 sudo make install
 cd /home/pi
 rm -rf ydotool
+
+# Ensure ydotoold.service exists
+echo "Creating ydotoold service..."
+echo "[Unit]
+Description=Ydotool Daemon
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/local/bin/ydotoold
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target" | sudo tee /etc/systemd/system/ydotoold.service
 
 # Set up uinput permissions for pi user
 echo "Configuring uinput permissions..."
@@ -72,13 +88,27 @@ else
     echo "I2C is already enabled in $CONFIG_FILE."
 fi
 
-# Enable and start ydotoold service AFTER ensuring uinput is set up
+# Ensure ft5316-touchscreen.service exists
+echo "Creating ft5316-touchscreen service..."
+echo "[Unit]
+Description=FT5316 Touchscreen Service
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/ft5316_touch.py
+Restart=always
+User=pi
+Group=pi
+
+[Install]
+WantedBy=multi-user.target" | sudo tee /etc/systemd/system/ft5316-touchscreen.service
+
+# Enable and start services
 echo "Enabling and starting ydotoold service..."
 sudo systemctl daemon-reload
 sudo systemctl enable ydotoold.service
 sudo systemctl start ydotoold.service
 
-# Enable and start touchscreen service
 echo "Enabling and starting touchscreen service..."
 sudo systemctl enable ft5316-touchscreen.service
 sudo systemctl start ft5316-touchscreen.service
