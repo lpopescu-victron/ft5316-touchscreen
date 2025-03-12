@@ -46,8 +46,8 @@ sudo usermod -aG input pi
 sudo bash -c 'echo "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", MODE=\"0660\", GROUP=\"input\"" > /etc/udev/rules.d/99-uinput.rules'
 sudo udevadm control --reload-rules
 sudo udevadm trigger
-sudo modprobe -r uinput || echo "Module uinput is in use, continuing..."
-sudo modprobe uinput
+sudo chmod 660 /dev/uinput
+sudo chgrp input /dev/uinput
 
 # Enable I2C in config.txt
 echo "Checking and enabling I2C..."
