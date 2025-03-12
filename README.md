@@ -1,4 +1,4 @@
-# Victron Energy Touch GX 7 Touchscreen Setup for Raspberry Pi 5
+# Victron Energy Touch GX 7 & 5 Inch - Setup for Raspberry Pi 5
 
 This script sets up the Victron Energy Touch GX 7 Touchscreen on a Raspberry Pi, including necessary dependencies and services.
 
@@ -99,14 +99,6 @@ To view logs related to `ydotoold`:
 journalctl -u ydotoold.service --no-pager --lines=50
 ```
 
-### Enable services on boot
-
-If services are not starting automatically after reboot, enable them:
-
-```bash
-sudo systemctl enable ft5316-touchscreen.service
-sudo systemctl enable ydotoold.service
-```
 
 ---
 
