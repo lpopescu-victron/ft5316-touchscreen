@@ -43,7 +43,7 @@ rm -rf ydotool
 # Set up uinput permissions with persistent udev rule
 echo "Configuring uinput permissions with persistent rule..."
 sudo usermod -aG input pi
-echo 'SUBSYSTEM=="misc", KERNEL=="uinput", MODE="0660", GROUP="input", RUN+="/bin/chmod 660 /dev/uinput /bin/chgrp input /dev/uinput"' | sudo tee /etc/udev/rules.d/10-uinput.rules
+echo 'SUBSYSTEM=="misc", KERNEL=="uinput", MODE="0660", GROUP="input"' | sudo tee /etc/udev/rules.d/10-uinput.rules
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 # Fallback: manually set permissions and verify
@@ -235,7 +235,7 @@ TimeoutStopSec=10
 WantedBy=graphical.target
 EOF
 
-# Create and enable ydotoold service with wrapper
+# Create and enable ydotoold service with wrapper, running as root
 echo "Creating ydotoold service with wrapper..."
 cat << 'EOF' | sudo tee /etc/systemd/system/ydotoold.service
 [Unit]
@@ -243,7 +243,7 @@ Description=Starts ydotoold Daemon
 After=graphical.target
 
 [Service]
-User=pi
+User=root
 ExecStart=/home/pi/start_ydotoold.sh
 Restart=always
 WorkingDirectory=/home/pi
