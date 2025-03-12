@@ -1,6 +1,7 @@
 # Victron Energy Touch GX 7 & 5 Inch - Setup for Raspberry Pi 5
 
 This script sets up the Victron Energy Touch GX 7 Touchscreen on a Raspberry Pi, including necessary dependencies and services.
+It was tested on Pi5, Pi4 and Pi3 running Bookworm and Wayland session type. 
 
 
 ---
