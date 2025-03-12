@@ -40,14 +40,13 @@ sudo make install
 cd /home/pi
 rm -rf ydotool
 
-# Set up uinput permissions for pi user
-echo "Configuring uinput permissions..."
+# Set up uinput permissions with persistent udev rule
+echo "Configuring uinput permissions with persistent rule..."
 sudo usermod -aG input pi
-sudo bash -c 'echo "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", MODE=\"0660\", GROUP=\"input\"" > /etc/udev/rules.d/99-uinput.rules'
+echo 'SUBSYSTEM=="misc", KERNEL=="uinput", MODE="0660", GROUP="input", RUN+="/bin/chmod 660 /dev/uinput /bin/chgrp input /dev/uinput"' | sudo tee /etc/udev/rules.d/10-uinput.rules
 sudo udevadm control --reload-rules
 sudo udevadm trigger
-# Fallback: manually set permissions with retry
-echo "Checking and setting uinput permissions..."
+# Fallback: manually set permissions and verify
 for i in {1..5}; do
     if [ -e /dev/uinput ]; then
         sudo chmod 660 /dev/uinput
